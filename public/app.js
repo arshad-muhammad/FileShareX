@@ -456,7 +456,7 @@ function renderOnlineUsers() {
 
     li.innerHTML = `
       <div class="user-item-left">
-        <div class="avatar" style="background-color: ${user.color}; width: 24px; height: 24px; font-size: 0.72rem;">${initial}</div>
+        <div class="avatar user-item-avatar" style="background-color: ${user.color};">${initial}</div>
         <span class="user-item-name" style="font-weight: ${isMe ? '700' : '500'}">${escapeHTML(user.username)} ${isMe ? '(You)' : ''}</span>
       </div>
       <span class="user-item-ip">${escapeHTML(user.ip)}</span>
@@ -521,7 +521,6 @@ function getFileTypeSVG(fileName, fileType) {
   const images = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'];
   const videos = ['mp4', 'mkv', 'webm', 'avi', 'mov'];
   const archives = ['zip', 'rar', '7z', 'tar', 'gz'];
-  const documents = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'md'];
 
   if (images.includes(ext) || (fileType && fileType.startsWith('image/'))) {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`;
@@ -575,8 +574,7 @@ async function queueAndUploadFiles(filesList) {
     // Start Async Hashing first
     try {
       console.log(`Calculating signature for: ${file.name}`);
-      const sha256 = await calculateFileSHA256(file);
-      task.sha256 = sha256;
+      task.sha256 = await calculateFileSHA256(file);
       task.status = 'uploading';
       renderUploadTasks();
       
@@ -679,7 +677,9 @@ async function runChunkedUpload(uploadId) {
         }, 3000);
 
       } else {
-        throw new Error(completeData.error || 'Server assembly failure');
+        console.error(completeData.error || 'Server assembly failure');
+        task.status = 'error';
+        renderUploadTasks();
       }
     }
 
@@ -867,7 +867,7 @@ function openPreviewModal(fileName, url, fileType) {
     // Unsupported preview format fallback
     DOM.previewContent.innerHTML = `
       <div class="preview-fallback-container">
-        <div class="file-icon-box" style="width: 80px; height: 80px;">
+        <div class="file-icon-box preview-fallback-icon">
           ${getFileTypeSVG(fileName, fileType)}
         </div>
         <div class="preview-fallback-title">${escapeHTML(fileName)}</div>
@@ -944,6 +944,25 @@ function setupEventListeners() {
   DOM.sidebarToggle.addEventListener('click', () => toggleSidebar(true));
   DOM.sidebarClose.addEventListener('click', () => toggleSidebar(false));
   DOM.sidebarOverlay.addEventListener('click', () => toggleSidebar(false));
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 768) {
+      toggleSidebar(false);
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      toggleSidebar(false);
+
+      document.querySelectorAll('.modal-overlay.active').forEach(overlay => {
+        overlay.classList.remove('active');
+        if (overlay.id === 'preview-modal') {
+          DOM.previewContent.innerHTML = '';
+        }
+      });
+    }
+  });
 
   // 3. Chat form messaging submission
   DOM.chatForm.addEventListener('submit', (e) => {
