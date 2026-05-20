@@ -1233,18 +1233,12 @@ button {
   background-color: rgba(16, 185, 129, 0.1);
   color: #10b981;
 }
-
-.upload-task-progress-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.upload-task-error {
+  color: #ef4444;
+  font-size: 0.8rem;
+  margin-top: 10px;
+  line-height: 1.4;
 }
-
-.progress-bar-container {
-  flex-grow: 1;
-  height: 6px;
-  background-color: var(--bg-sidebar-active);
-  border-radius: 3px;
   overflow: hidden;
 }
 

@@ -39,8 +39,16 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // Configure Multer for temp chunk storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadId = req.body.uploadId;
+    const uploadId = req.body.uploadId || req.query.uploadId || req.headers['uploadid'] || req.headers['upload-id'];
     if (!uploadId) {
+      console.error('Missing uploadId in chunk upload request', {
+        body: req.body,
+        query: req.query,
+        headers: {
+          uploadid: req.headers['uploadid'],
+          'upload-id': req.headers['upload-id']
+        }
+      });
       return cb(new Error('Missing uploadId'), null);
     }
     const chunkDir = path.join(TMP_DIR, uploadId);
