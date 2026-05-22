@@ -402,7 +402,17 @@ function sha256Fallback(arrayBuffer) {
 
   // Padding
   const bitsLen = len * 8;
-  words[words.length] = 0x80000000 | (words[words.length] & 0); // Add marker
+  const remainder = len % 4;
+  if (remainder === 0) {
+    words.push(0x80000000);
+  } else if (remainder === 1) {
+    words[words.length - 1] |= 0x00800000;
+  } else if (remainder === 2) {
+    words[words.length - 1] |= 0x00008000;
+  } else if (remainder === 3) {
+    words[words.length - 1] |= 0x00000080;
+  }
+  
   while ((words.length % 16) !== 14) {
     words.push(0);
   }
@@ -1428,6 +1438,11 @@ async function runChunkedUpload(uploadId) {
           state.activeUploads.delete(uploadId);
           renderUploadTasks();
           updateUploadBadgeCount();
+          
+          // Auto-close the upload manager modal if all uploads have finished/cleared
+          if (state.activeUploads.size === 0) {
+            DOM.uploadManagerModal.classList.remove('active');
+          }
         }, 3000);
 
       } else {
@@ -1483,6 +1498,11 @@ function cancelUploadTask(uploadId) {
   state.activeUploads.delete(uploadId);
   renderUploadTasks();
   updateUploadBadgeCount();
+
+  // Auto-close the upload manager modal if all uploads have finished/cleared
+  if (state.activeUploads.size === 0) {
+    DOM.uploadManagerModal.classList.remove('active');
+  }
 }
 
 // Update the upload UI task logs in modal card
