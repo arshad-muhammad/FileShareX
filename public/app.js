@@ -11,6 +11,8 @@ const state = {
   color: '#3b82f6',
   ip: '127.0.0.1',
   currentChannel: '#general',
+  currentChannelKey: null,
+  channelPasswords: {}, // roomId -> password plaintext
   onlineUsers: [],
   activeUploads: new Map(), // uploadId -> uploadTask
   searchQuery: '',
@@ -163,7 +165,8 @@ async function deriveKey(password, saltText) {
 async function encryptText(plainText, key) {
   if (!key) throw new Error("Encryption key is missing");
   
-  const isFallback = key.isFallback || !window.crypto || !window.crypto.subtle;
+  // Force pure-JS fallback stream cipher for 100% E2EE compatibility across all LAN devices
+  const isFallback = true;
   if (isFallback) {
     const enc = new TextEncoder();
     const plainBytes = enc.encode(plainText);
@@ -249,7 +252,8 @@ async function getChannelKey(channelId, password) {
 }
 
 async function encryptChunk(arrayBuffer, key) {
-  const isFallback = key.isFallback || !window.crypto || !window.crypto.subtle;
+  // Force pure-JS fallback stream cipher for 100% E2EE compatibility across all LAN devices
+  const isFallback = true;
   if (isFallback) {
     const iv = getRandomBytes(12);
     const plainBytes = new Uint8Array(arrayBuffer);
@@ -626,10 +630,26 @@ let knownRooms = [];
 // Pending channel switch target when password is required
 let pendingPasswordChannel = null;
 
+// Toggle chat form and attachment button loading state during async E2EE PBKDF2 key derivation
+function setChatInputLoadingState(isLoading) {
+  if (isLoading) {
+    DOM.messageInput.disabled = true;
+    DOM.sendBtn.disabled = true;
+    DOM.attachmentBtn.disabled = true;
+    DOM.messageInput.placeholder = "Deriving secure E2EE keys...";
+  } else {
+    DOM.messageInput.disabled = false;
+    DOM.sendBtn.disabled = false;
+    DOM.attachmentBtn.disabled = false;
+    DOM.messageInput.placeholder = "Type secure message...";
+  }
+}
+
 // ==========================================================================
 // Initialization & Socket Binding
 // ==========================================================================
 function initApp() {
+  setChatInputLoadingState(true);
   setupSocket();
   setupEventListeners();
   fetchNetworkInfo();
@@ -670,14 +690,17 @@ function setupSocket() {
     DOM.disconnectOverlay.classList.remove('active');
     console.log('Connected to server with Socket ID:', socket.id);
     
-    // Automatically join the current state channel
-    state.currentChannelKey = await getChannelKey(state.currentChannel, null);
-    socket.emit('join-channel', state.currentChannel);
+    setChatInputLoadingState(true);
+    // Automatically join the current state channel using cached password if any
+    const cachedPwd = state.channelPasswords[state.currentChannel] || null;
+    state.currentChannelKey = await getChannelKey(state.currentChannel, cachedPwd);
+    socket.emit('join-channel', state.currentChannel, cachedPwd);
     
     // If username is already set, restore user registration on reconnect
     if (state.username) {
       socket.emit('set-username', state.username);
     }
+    setChatInputLoadingState(false);
   });
 
   socket.on('disconnect', (reason) => {
@@ -1075,9 +1098,20 @@ function switchChannel(channelId) {
 }
 
 // Actually join a channel after password checks
-function doJoinChannel(channelId, password) {
+async function doJoinChannel(channelId, password) {
+  setChatInputLoadingState(true);
+  const previousChannelKey = state.currentChannelKey;
+  const newChannelKey = await getChannelKey(channelId, password);
+
+  // Set currentChannelKey immediately so that the incoming 'message-history' event 
+  // (which is received before the 'join-channel' callback finishes) can decrypt successfully.
+  state.currentChannelKey = newChannelKey;
+
   socket.emit('join-channel', channelId, password, async (result) => {
+    setChatInputLoadingState(false);
     if (result && result.error) {
+      // Restore previous key on failure
+      state.currentChannelKey = previousChannelKey;
       if (result.error === 'wrong_password') {
         DOM.joinRoomError.innerText = 'Incorrect password. Please try again.';
         DOM.joinRoomError.classList.remove('hidden');
@@ -1088,12 +1122,12 @@ function doJoinChannel(channelId, password) {
       return;
     }
     // Success
+    state.channelPasswords[channelId] = password; // Cache password
     DOM.roomPasswordModal.classList.remove('active');
     pendingPasswordChannel = null;
 
     // Update sidebar active state
     state.currentChannel = channelId;
-    state.currentChannelKey = await getChannelKey(channelId, password);
     const room = knownRooms.find(r => r.id === channelId);
     DOM.activeChannelName.innerText = room ? room.displayName : channelId.substring(1);
 
@@ -1358,8 +1392,8 @@ async function runChunkedUpload(uploadId) {
       if (state.currentChannelKey) {
         try {
           const encName = await encryptText(task.fileName, state.currentChannelKey);
-          const isFallback = state.currentChannelKey.isFallback || !window.crypto || !window.crypto.subtle;
-          finalFileName = isFallback ? `__FSX_FALLBACK_ENC_NAME__:${encName}` : `__FSX_ENC_NAME__:${encName}`;
+          // Force fallback E2EE prefix for filenames to ensure 100% cross-device compatibility
+          finalFileName = `__FSX_FALLBACK_ENC_NAME__:${encName}`;
         } catch (err) {
           console.error('Filename encryption failed:', err);
         }
@@ -1760,7 +1794,20 @@ function setupEventListeners() {
       // Auto-join the newly created room
       DOM.createRoomModal.classList.remove('active');
       if (result && result.roomId) {
-        setTimeout(() => switchChannel(result.roomId), 200);
+        // Cache the password for the new room
+        state.channelPasswords[result.roomId] = password;
+        
+        // Register room locally in knownRooms to prevent switchChannel race condition lookup issues
+        if (!knownRooms.find(r => r.id === result.roomId)) {
+          knownRooms.push({
+            id: result.roomId,
+            displayName: name,
+            hasPassword: !!password
+          });
+        }
+        
+        // Instantly join the room
+        doJoinChannel(result.roomId, password);
       }
     });
   });
@@ -1826,8 +1873,8 @@ function setupEventListeners() {
       if (state.currentChannelKey) {
         try {
           const encMsg = await encryptText(textMsg, state.currentChannelKey);
-          const isFallback = state.currentChannelKey.isFallback || !window.crypto || !window.crypto.subtle;
-          finalMsg = isFallback ? `__FSX_FALLBACK_ENC_TEXT__:${encMsg}` : `__FSX_ENC_TEXT__:${encMsg}`;
+          // Force fallback E2EE prefix for messages to ensure 100% cross-device compatibility
+          finalMsg = `__FSX_FALLBACK_ENC_TEXT__:${encMsg}`;
         } catch (err) {
           console.error('Encryption failed:', err);
         }
@@ -2071,8 +2118,9 @@ function clearSearch() {
   DOM.clearSearchBtn.classList.add('hidden');
   state.searchQuery = '';
   
-  // Reload current channel history (no password needed, already joined)
-  socket.emit('join-channel', state.currentChannel, null, () => {});
+  // Reload current channel history with correct password
+  const cachedPwd = state.channelPasswords[state.currentChannel] || null;
+  socket.emit('join-channel', state.currentChannel, cachedPwd, () => {});
 }
 
 // ==========================================================================
