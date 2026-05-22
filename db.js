@@ -4,6 +4,7 @@ const path = require('path');
 const DB_DIR = path.join(__dirname, 'database');
 const SQLITE_PATH = path.join(DB_DIR, 'chat.db');
 const JSON_PATH = path.join(DB_DIR, 'chat.json');
+const DRIVE_JSON_PATH = path.join(DB_DIR, 'drive.json');
 
 // Ensure database directory exists
 if (!fs.existsSync(DB_DIR)) {
@@ -13,6 +14,7 @@ if (!fs.existsSync(DB_DIR)) {
 let dbInstance = null;
 let useJsonFallback = false;
 let jsonDbData = [];
+let jsonDriveData = [];
 
 // SQLite implementation
 class SQLiteDB {
@@ -26,7 +28,7 @@ class SQLiteDB {
       this.db = new this.sqlite3.Database(SQLITE_PATH, (err) => {
         if (err) return reject(err);
 
-        const createTableQuery = `
+        const createMessagesTable = `
           CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
@@ -41,9 +43,28 @@ class SQLiteDB {
           )
         `;
 
-        this.db.run(createTableQuery, (err) => {
+        this.db.run(createMessagesTable, (err) => {
           if (err) return reject(err);
-          resolve();
+          
+          const createDriveTable = `
+            CREATE TABLE IF NOT EXISTS files_drive (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              filename TEXT NOT NULL,
+              filepath TEXT,
+              filetype TEXT,
+              size INTEGER,
+              is_folder INTEGER DEFAULT 0,
+              parent_folder_id TEXT DEFAULT 'root',
+              created_by TEXT NOT NULL,
+              timestamp INTEGER NOT NULL,
+              room_id TEXT NOT NULL
+            )
+          `;
+          
+          this.db.run(createDriveTable, (err) => {
+            if (err) return reject(err);
+            resolve();
+          });
         });
       });
     });
@@ -123,6 +144,66 @@ class SQLiteDB {
       });
     });
   }
+
+  // --- Virtual NAS LAN Drive Persistence ---
+  getDriveFiles(roomId, parentFolderId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT * FROM files_drive 
+        WHERE room_id = ? AND parent_folder_id = ?
+        ORDER BY is_folder DESC, filename ASC
+      `;
+      this.db.all(query, [roomId, parentFolderId], (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows);
+      });
+    });
+  }
+
+  saveDriveFile(file) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT INTO files_drive (filename, filepath, filetype, size, is_folder, parent_folder_id, created_by, timestamp, room_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      this.db.run(
+        query,
+        [
+          file.filename,
+          file.filepath || null,
+          file.filetype || null,
+          file.size || 0,
+          file.is_folder || 0,
+          file.parent_folder_id || 'root',
+          file.created_by,
+          file.timestamp,
+          file.room_id
+        ],
+        function (err) {
+          if (err) return reject(err);
+          resolve({ id: this.lastID, ...file });
+        }
+      );
+    });
+  }
+
+  getDriveFileById(id) {
+    return new Promise((resolve, reject) => {
+      this.db.get('SELECT * FROM files_drive WHERE id = ?', [id], (err, row) => {
+        if (err) return reject(err);
+        resolve(row || null);
+      });
+    });
+  }
+
+  deleteDriveFile(id) {
+    return new Promise((resolve, reject) => {
+      this.db.run('DELETE FROM files_drive WHERE id = ?', [id], (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+  }
 }
 
 // JSON Fallback implementation (extremely robust, doesn't require native modules)
@@ -140,6 +221,19 @@ const jsonDB = {
       } catch (err) {
         console.error('Error loading JSON database, resetting database in-memory:', err);
         jsonDbData = [];
+      }
+
+      try {
+        if (fs.existsSync(DRIVE_JSON_PATH)) {
+          const raw = fs.readFileSync(DRIVE_JSON_PATH, 'utf8');
+          jsonDriveData = JSON.parse(raw);
+        } else {
+          jsonDriveData = [];
+          fs.writeFileSync(DRIVE_JSON_PATH, JSON.stringify(jsonDriveData, null, 2), 'utf8');
+        }
+      } catch (err) {
+        console.error('Error loading JSON drive database, resetting in-memory:', err);
+        jsonDriveData = [];
       }
       resolve();
     });
@@ -206,6 +300,60 @@ const jsonDB = {
         reject(err);
       }
     });
+  },
+
+  // --- Virtual NAS LAN Drive JSON Fallbacks ---
+  getDriveFiles(roomId, parentFolderId) {
+    return new Promise((resolve) => {
+      const filtered = jsonDriveData
+        .filter(f => f.room_id === roomId && f.parent_folder_id === parentFolderId)
+        .sort((a, b) => {
+          if (a.is_folder !== b.is_folder) {
+            return b.is_folder - a.is_folder;
+          }
+          return a.filename.localeCompare(b.filename);
+        });
+      resolve(filtered);
+    });
+  },
+
+  saveDriveFile(file) {
+    return new Promise((resolve, reject) => {
+      const newFile = {
+        id: jsonDriveData.length + 1,
+        ...file
+      };
+      jsonDriveData.push(newFile);
+      try {
+        const tempPath = DRIVE_JSON_PATH + '.tmp';
+        fs.writeFileSync(tempPath, JSON.stringify(jsonDriveData, null, 2), 'utf8');
+        fs.renameSync(tempPath, DRIVE_JSON_PATH);
+        resolve(newFile);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  },
+
+  getDriveFileById(id) {
+    return new Promise((resolve) => {
+      resolve(jsonDriveData.find(f => f.id == id) || null);
+    });
+  },
+
+  deleteDriveFile(id) {
+    return new Promise((resolve, reject) => {
+      const idx = jsonDriveData.findIndex(f => f.id == id);
+      if (idx !== -1) jsonDriveData.splice(idx, 1);
+      try {
+        const tempPath = DRIVE_JSON_PATH + '.tmp';
+        fs.writeFileSync(tempPath, JSON.stringify(jsonDriveData, null, 2), 'utf8');
+        fs.renameSync(tempPath, DRIVE_JSON_PATH);
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
 };
 
@@ -250,5 +398,25 @@ module.exports = {
   async deleteMessage(id) {
     if (!dbInstance) throw new Error('Database not initialized');
     return dbInstance.deleteMessage(id);
+  },
+
+  async getDriveFiles(roomId, parentFolderId) {
+    if (!dbInstance) throw new Error('Database not initialized');
+    return dbInstance.getDriveFiles(roomId, parentFolderId);
+  },
+
+  async saveDriveFile(file) {
+    if (!dbInstance) throw new Error('Database not initialized');
+    return dbInstance.saveDriveFile(file);
+  },
+
+  async getDriveFileById(id) {
+    if (!dbInstance) throw new Error('Database not initialized');
+    return dbInstance.getDriveFileById(id);
+  },
+
+  async deleteDriveFile(id) {
+    if (!dbInstance) throw new Error('Database not initialized');
+    return dbInstance.deleteDriveFile(id);
   }
 };

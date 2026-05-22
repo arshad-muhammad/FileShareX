@@ -180,6 +180,86 @@ app.post('/api/rooms', (req, res) => {
   res.json({ success: true, room: { id, displayName: clean, hasPassword } });
 });
 
+// --- Phase 3: LAN Auto-Discovery & Phase 5: Virtual NAS APIs ---
+const dgram = require('dgram');
+const udpSocket = dgram.createSocket('udp4');
+const discoveredNodes = new Map();
+
+// Periodically clean up offline nodes (inactive for > 12 seconds)
+setInterval(() => {
+  const now = Date.now();
+  discoveredNodes.forEach((node, ip) => {
+    if (now - node.lastSeen > 12000) {
+      discoveredNodes.delete(ip);
+    }
+  });
+}, 5000);
+
+// API to discover other active LAN FileShareX workspaces
+app.get('/api/discover', (req, res) => {
+  res.json(Array.from(discoveredNodes.values()));
+});
+
+// API to fetch directory content inside a room / parent folder
+app.get('/api/drive', async (req, res) => {
+  const { room, parent } = req.query;
+  if (!room) return res.status(400).json({ error: 'Missing room parameter' });
+  try {
+    const files = await db.getDriveFiles(room, parent || 'root');
+    res.json(files);
+  } catch (err) {
+    console.error('Error fetching drive files:', err);
+    res.status(500).json({ error: 'Failed to retrieve files' });
+  }
+});
+
+// API to create a new virtual directory folder
+app.post('/api/drive/folder', async (req, res) => {
+  const { room, parent, folderName, username } = req.body;
+  if (!room || !folderName || !username) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+  try {
+    const folderItem = {
+      filename: folderName,
+      filepath: null,
+      filetype: 'folder',
+      size: 0,
+      is_folder: 1,
+      parent_folder_id: parent || 'root',
+      created_by: username,
+      timestamp: Date.now(),
+      room_id: room
+    };
+    const saved = await db.saveDriveFile(folderItem);
+    
+    // Notify room of update
+    io.to(room).emit('drive-updated', { roomId: room });
+    
+    res.json({ success: true, folder: saved });
+  } catch (err) {
+    console.error('Failed to create folder:', err);
+    res.status(500).json({ error: 'Failed to create folder' });
+  }
+});
+
+// API to delete virtual files/folders persistently
+app.delete('/api/drive', async (req, res) => {
+  const { id, room } = req.query;
+  if (!id || !room) return res.status(400).json({ error: 'Missing id or room parameter' });
+  try {
+    await db.deleteDriveFile(id);
+    
+    // Notify room of update
+    io.to(room).emit('drive-updated', { roomId: room });
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to delete drive file:', err);
+    res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
 // Check chunk upload status (to resume uploads)
 app.get('/api/upload/status', (req, res) => {
   const { uploadId } = req.query;
@@ -325,6 +405,30 @@ app.post('/api/upload/complete', async (req, res) => {
 
     // Store in Database
     const fileUrl = `/uploads/${encodeURIComponent(safeFileName)}`;
+    
+    if (req.body.isDriveFile === 'true' || req.body.isDriveFile === true) {
+      const driveFile = {
+        filename: fileName,
+        filepath: fileUrl,
+        filetype: fileType,
+        size: parseInt(fileSize, 10),
+        is_folder: 0,
+        parent_folder_id: req.body.parentFolderId || 'root',
+        created_by: username,
+        timestamp: Date.now(),
+        room_id: channel
+      };
+      
+      const savedDriveItem = await db.saveDriveFile(driveFile);
+      io.to(channel).emit('drive-updated', { roomId: channel });
+      
+      return res.json({
+        success: true,
+        message: 'File uploaded to Virtual NAS successfully',
+        file: savedDriveItem
+      });
+    }
+
     const dbMessage = {
       username,
       message: `Shared a file: ${fileName}`,
@@ -585,6 +689,57 @@ io.on('connection', (socket) => {
     });
   });
 
+  // --- WebRTC voice/video & Signaling Events ---
+  socket.on('webrtc-signal', ({ target, signal }) => {
+    io.to(target).emit('webrtc-signal', { sender: socket.id, signal });
+  });
+
+  socket.on('join-call', (channelName) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    socket.to(channelName).emit('user-joined-call', {
+      socketId: socket.id,
+      username: user.username
+    });
+  });
+
+  socket.on('leave-call', (channelName) => {
+    socket.to(channelName).emit('user-left-call', { socketId: socket.id });
+  });
+
+  // --- P2P Direct File Transfer Signaling ---
+  socket.on('p2p-request', ({ target, fileName, fileSize, fileType }) => {
+    const sender = onlineUsers.get(socket.id);
+    if (!sender) return;
+    io.to(target).emit('p2p-request', {
+      senderId: socket.id,
+      senderName: sender.username,
+      fileName,
+      fileSize,
+      fileType
+    });
+  });
+
+  socket.on('p2p-respond', ({ target, accepted }) => {
+    io.to(target).emit('p2p-respond', {
+      responderId: socket.id,
+      accepted
+    });
+  });
+
+  // --- Whiteboard Drawing and Clearing Relays ---
+  socket.on('draw-line', (data) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    socket.to(user.currentChannel).emit('draw-line', data);
+  });
+
+  socket.on('clear-whiteboard', () => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    io.to(user.currentChannel).emit('clear-whiteboard');
+  });
+
   // Handle Disconnect
   socket.on('disconnect', () => {
     const user = onlineUsers.get(socket.id);
@@ -625,6 +780,48 @@ db.init().then(() => {
     
     console.log('\nScan connection QR code image generated inside server runtime.');
     console.log('======================================================\n');
+
+    // Start UDP auto-discovery beacon
+    try {
+      udpSocket.on('message', (msg, rinfo) => {
+        try {
+          const data = JSON.parse(msg.toString());
+          if (data.ip === primaryIP) return; // ignore self
+          discoveredNodes.set(data.ip, {
+            url: data.url,
+            ip: data.ip,
+            name: data.name,
+            lastSeen: Date.now()
+          });
+        } catch (e) {}
+      });
+
+      udpSocket.on('listening', () => {
+        try {
+          udpSocket.setBroadcast(true);
+          console.log('UDP LAN Auto-Discovery beacon listening on port 41234...');
+        } catch (e) {
+          console.warn('UDP setBroadcast failed:', e.message);
+        }
+      });
+
+      udpSocket.bind(41234, '0.0.0.0', () => {
+        // Start sending own UDP beacon every 4 seconds
+        setInterval(() => {
+          try {
+            const message = Buffer.from(JSON.stringify({
+              url: localUrl,
+              ip: primaryIP,
+              port: PORT,
+              name: os.hostname() || 'FileShareX-Host'
+            }));
+            udpSocket.send(message, 0, message.length, 41234, '255.255.255.255');
+          } catch (e) {}
+        }, 4000);
+      });
+    } catch (udpErr) {
+      console.warn('Failed to bind UDP Auto-Discovery:', udpErr.message);
+    }
   });
 }).catch(err => {
   console.error('Fatal: Database failed to initialize:', err);

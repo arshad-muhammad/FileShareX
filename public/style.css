@@ -1751,3 +1751,721 @@ ul { list-style: none; }
 @media (min-width: 769px) {
   .mobile-only-btn { display: none; }
 }
+
+/* ============================================================
+   19. EXTRA FEATURE STYLES (Phase 2, 3, 4, 5)
+   ============================================================ */
+
+/* Feature toggles in workspace header */
+.workspace-features-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  background: var(--bg-elevated);
+  padding: 3px 6px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+}
+
+.header-feature-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: transparent;
+  transition: all var(--t-fast);
+  cursor: pointer;
+  border: none;
+}
+
+.header-feature-btn:hover {
+  color: var(--accent-hover);
+  background: var(--bg-hover);
+}
+
+.header-feature-btn.active {
+  color: var(--text-on-accent);
+  background: var(--accent);
+  box-shadow: var(--accent-glow);
+}
+
+.header-feature-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Phase 2: WebRTC voice/video Call panel styling */
+.call-panel {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-strong);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slide-down 0.3s var(--spring);
+}
+
+.call-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.call-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+}
+
+.call-title-row h4 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.call-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.call-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.call-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.call-btn.muted {
+  background: rgba(248, 113, 113, 0.15);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--red);
+}
+
+.call-btn.leave-btn {
+  background: rgba(248, 113, 113, 0.22);
+  border-color: rgba(248, 113, 113, 0.45);
+  color: var(--red);
+}
+
+.call-btn.leave-btn:hover {
+  background: var(--red);
+  color: white;
+  box-shadow: 0 0 16px rgba(248, 113, 113, 0.45);
+}
+
+.call-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.call-streams-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.local-stream-wrapper, .remote-stream-wrapper {
+  position: relative;
+  background: var(--bg-void);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border-strong);
+  aspect-ratio: 4/3;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+}
+
+.local-stream-wrapper video, .remote-stream-wrapper video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.stream-label {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(4, 4, 10, 0.65);
+  backdrop-filter: blur(4px);
+  padding: 4px 8px;
+  border-radius: var(--r-xs);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.remote-streams-grid {
+  display: contents;
+}
+
+/* Phase 4: Whiteboard styling */
+.whiteboard-panel {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-strong);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slide-down 0.3s var(--spring);
+}
+
+.whiteboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.whiteboard-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.whiteboard-title-row svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+
+.whiteboard-title-row h4 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.whiteboard-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.whiteboard-controls input[type="color"] {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.whiteboard-controls select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  font-size: 0.76rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.wb-control-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  border: 1px solid var(--border);
+}
+
+.wb-control-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.wb-control-btn.active {
+  color: white;
+  background: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.wb-control-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.wb-control-btn.clear-btn:hover {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--red);
+  border-color: rgba(248, 113, 113, 0.25);
+}
+
+.canvas-wrapper {
+  background: #0f0f1c;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  position: relative;
+  overflow: hidden;
+  height: 320px;
+}
+
+#whiteboard-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+/* Phase 5: Virtual NAS LAN Drive styling */
+.nas-panel {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  height: 480px;
+  animation: slide-down 0.3s var(--spring);
+}
+
+.nas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-sidebar);
+}
+
+.nas-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.81rem;
+}
+
+.breadcrumb-item {
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--t-fast);
+}
+
+.breadcrumb-item:hover {
+  color: var(--accent);
+}
+
+.breadcrumb-item::after {
+  content: '/';
+  margin-left: 6px;
+  color: var(--text-muted);
+}
+
+.breadcrumb-item:last-child {
+  color: var(--text-primary);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.breadcrumb-item:last-child::after {
+  display: none;
+}
+
+.nas-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nas-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-md);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.nas-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.nas-btn.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent-border);
+}
+
+.nas-btn.primary:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--accent-glow);
+}
+
+.nas-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.nas-explorer {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.nas-list-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.2fr 1.2fr 100px;
+  padding: 8px 16px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.nas-files-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.nas-item {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.2fr 1.2fr 100px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  font-size: 0.81rem;
+  transition: background var(--t-fast);
+}
+
+.nas-item:hover {
+  background: var(--bg-hover);
+}
+
+.nas-col-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nas-col-name.folder-item {
+  color: var(--yellow);
+  cursor: pointer;
+}
+
+.nas-col-name.folder-item:hover {
+  text-decoration: underline;
+}
+
+.nas-col-name svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.nas-col-size {
+  color: var(--text-secondary);
+}
+
+.nas-col-owner {
+  color: var(--text-secondary);
+}
+
+.nas-col-date {
+  color: var(--text-muted);
+}
+
+.nas-col-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nas-action-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: all var(--t-fast);
+  background: transparent;
+  cursor: pointer;
+  border: none;
+}
+
+.nas-action-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.nas-action-btn.delete:hover {
+  color: var(--red);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.nas-action-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.nas-empty-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 48px;
+  color: var(--text-muted);
+  gap: 12px;
+}
+
+.nas-empty-placeholder svg {
+  width: 44px;
+  height: 44px;
+  opacity: 0.5;
+}
+
+.nas-empty-placeholder p {
+  font-size: 0.81rem;
+}
+
+/* Phase 3: Auto-Discovery UI in connect screen */
+.discovered-nodes-container {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-strong);
+  text-align: left;
+}
+
+.discovery-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.scanner-ping {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+.discovered-nodes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding-right: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.discovered-node-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition: all var(--t-fast);
+}
+
+.discovered-node-item:hover {
+  border-color: var(--accent-border);
+  background: var(--bg-hover);
+}
+
+.node-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.node-name-display {
+  font-size: 0.81rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.node-ip-display {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.node-join-btn {
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.node-join-btn:hover {
+  background: var(--accent);
+  color: white;
+  box-shadow: var(--accent-glow);
+}
+
+/* User item right action and P2P direct transfers */
+.user-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.user-item-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.p2p-send-btn-small {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.p2p-send-btn-small:hover {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.p2p-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 12px 16px;
+  z-index: 200;
+  animation: slide-in-right 0.35s var(--spring);
+}
+
+.p2p-toast-content {
+  display: flex;
+  align-items: center;
+}
+
+.p2p-toast-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.p2p-toast-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+.p2p-toast-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+
+#p2p-toast-msg {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.p2p-progress-container {
+  height: 3px;
+  background: var(--border-strong);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.p2p-progress-bar {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+/* Slide animations */
+@keyframes slide-down {
+  0% { transform: translateY(-12px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slide-in-right {
+  0% { transform: translateX(40px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}

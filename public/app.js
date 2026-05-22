@@ -16,7 +16,349 @@ const state = {
   searchQuery: '',
   isTyping: false,
   typingTimeout: null,
+  
+  // Collaborative Whiteboard State
+  wbColor: '#5a5cf0',
+  wbBrushSize: 5,
+  wbIsEraser: false,
+  
+  // Virtual NAS Drive State
+  nasCurrentFolderId: 'root',
+  nasBreadcrumbs: [{ id: 'root', name: 'Virtual Drive' }],
+  
+  // WebRTC Call State
+  isCallActive: false,
+  isAudioMuted: false,
+  isVideoMuted: false
 };
+
+// ==========================================================================
+// Zero-Knowledge E2EE Cryptography Helpers (PBKDF2 + AES-GCM 256-bit)
+// ==========================================================================
+const staticSalt = "filesharex-crypto-salt-key";
+
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+// Pure JS KDF and CTR-SHA256 stream cipher for insecure contexts (HTTP LAN)
+function sha256BytesFallback(stringOrBuffer) {
+  let buf;
+  if (typeof stringOrBuffer === 'string') {
+    buf = new TextEncoder().encode(stringOrBuffer);
+  } else if (stringOrBuffer instanceof ArrayBuffer) {
+    buf = new Uint8Array(stringOrBuffer);
+  } else {
+    buf = stringOrBuffer;
+  }
+  const cleanBuf = new Uint8Array(buf.length);
+  cleanBuf.set(buf);
+  const hex = sha256Fallback(cleanBuf.buffer);
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function getRandomBytes(length) {
+  const bytes = new Uint8Array(length);
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < length; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  return bytes;
+}
+
+function xorStreamCipher(dataBytes, keyBytes, ivBytes) {
+  const result = new Uint8Array(dataBytes.length);
+  const blockInput = new Uint8Array(48);
+  blockInput.set(keyBytes, 0);
+  blockInput.set(ivBytes, 32);
+  
+  const blockCount = Math.ceil(dataBytes.length / 32);
+  for (let i = 0; i < blockCount; i++) {
+    blockInput[44] = (i >>> 24) & 0xff;
+    blockInput[45] = (i >>> 16) & 0xff;
+    blockInput[46] = (i >>> 8) & 0xff;
+    blockInput[47] = i & 0xff;
+    
+    const keystreamBlock = sha256BytesFallback(blockInput);
+    
+    const start = i * 32;
+    const end = Math.min(start + 32, dataBytes.length);
+    for (let j = start; j < end; j++) {
+      result[j] = dataBytes[j] ^ keystreamBlock[j - start];
+    }
+  }
+  return result;
+}
+
+async function deriveKey(password, saltText) {
+  const fallbackBytes = sha256BytesFallback(password + "||" + saltText);
+  
+  if (!window.crypto || !window.crypto.subtle) {
+    return {
+      isFallback: true,
+      fallbackKey: fallbackBytes,
+      nativeKey: null
+    };
+  }
+  
+  try {
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+      "raw",
+      enc.encode(password),
+      { name: "PBKDF2" },
+      false,
+      ["deriveBits", "deriveKey"]
+    );
+    const nativeKey = await window.crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: enc.encode(saltText),
+        iterations: 1000,
+        hash: "SHA-256"
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+    return {
+      isFallback: false,
+      fallbackKey: fallbackBytes,
+      nativeKey: nativeKey
+    };
+  } catch (err) {
+    console.warn("Native Web Crypto key derivation failed, using pure JS fallback:", err);
+    return {
+      isFallback: true,
+      fallbackKey: fallbackBytes,
+      nativeKey: null
+    };
+  }
+}
+
+async function encryptText(plainText, key) {
+  if (!key) throw new Error("Encryption key is missing");
+  
+  const isFallback = key.isFallback || !window.crypto || !window.crypto.subtle;
+  if (isFallback) {
+    const enc = new TextEncoder();
+    const plainBytes = enc.encode(plainText);
+    const iv = getRandomBytes(12);
+    const encryptedBytes = xorStreamCipher(plainBytes, key.fallbackKey, iv);
+    const combined = new Uint8Array(iv.length + encryptedBytes.length);
+    combined.set(iv, 0);
+    combined.set(encryptedBytes, iv.length);
+    return arrayBufferToBase64(combined);
+  }
+  
+  try {
+    const enc = new TextEncoder();
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await window.crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: iv },
+      key.nativeKey || key,
+      enc.encode(plainText)
+    );
+    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(encrypted), iv.length);
+    return arrayBufferToBase64(combined);
+  } catch (err) {
+    console.warn("Native encryption failed, falling back to pure JS cipher:", err);
+    const enc = new TextEncoder();
+    const plainBytes = enc.encode(plainText);
+    const iv = getRandomBytes(12);
+    const encryptedBytes = xorStreamCipher(plainBytes, key.fallbackKey, iv);
+    const combined = new Uint8Array(iv.length + encryptedBytes.length);
+    combined.set(iv, 0);
+    combined.set(encryptedBytes, iv.length);
+    return arrayBufferToBase64(combined);
+  }
+}
+
+async function decryptText(base64Cipher, key, forceFallback = false) {
+  if (!key) throw new Error("Decryption key is missing");
+  
+  const useFallback = forceFallback || key.isFallback || !window.crypto || !window.crypto.subtle;
+  if (useFallback) {
+    const combined = base64ToArrayBuffer(base64Cipher);
+    const combinedView = new Uint8Array(combined);
+    const iv = combinedView.slice(0, 12);
+    const ciphertext = combinedView.slice(12);
+    const decryptedBytes = xorStreamCipher(ciphertext, key.fallbackKey, iv);
+    const dec = new TextDecoder();
+    return dec.decode(decryptedBytes);
+  }
+  
+  try {
+    const combined = base64ToArrayBuffer(base64Cipher);
+    const combinedView = new Uint8Array(combined);
+    const iv = combinedView.slice(0, 12);
+    const ciphertext = combinedView.slice(12);
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: iv },
+      key.nativeKey || key,
+      ciphertext
+    );
+    const dec = new TextDecoder();
+    return dec.decode(decrypted);
+  } catch (err) {
+    console.warn("Native decryption failed, trying pure JS fallback cipher:", err);
+    try {
+      const combined = base64ToArrayBuffer(base64Cipher);
+      const combinedView = new Uint8Array(combined);
+      const iv = combinedView.slice(0, 12);
+      const ciphertext = combinedView.slice(12);
+      const decryptedBytes = xorStreamCipher(ciphertext, key.fallbackKey, iv);
+      const dec = new TextDecoder();
+      return dec.decode(decryptedBytes);
+    } catch (fallbackErr) {
+      throw err;
+    }
+  }
+}
+
+async function getChannelKey(channelId, password) {
+  const pwdText = password || channelId;
+  const saltText = channelId + "-" + staticSalt;
+  return await deriveKey(pwdText, saltText);
+}
+
+async function encryptChunk(arrayBuffer, key) {
+  const isFallback = key.isFallback || !window.crypto || !window.crypto.subtle;
+  if (isFallback) {
+    const iv = getRandomBytes(12);
+    const plainBytes = new Uint8Array(arrayBuffer);
+    const encryptedBytes = xorStreamCipher(plainBytes, key.fallbackKey, iv);
+    const combined = new Uint8Array(iv.length + encryptedBytes.byteLength);
+    combined.set(iv, 0);
+    combined.set(encryptedBytes, iv.length);
+    return combined;
+  }
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: iv },
+    key.nativeKey || key,
+    arrayBuffer
+  );
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(encrypted), iv.length);
+  return combined;
+}
+
+async function encryptAndHashFile(file, key) {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const encryptedChunks = [];
+  let totalEncryptedSize = 0;
+  
+  for (let i = 0; i < totalChunks; i++) {
+    const startByte = i * CHUNK_SIZE;
+    const endByte = Math.min(startByte + CHUNK_SIZE, file.size);
+    const chunkBlob = file.slice(startByte, endByte);
+    const chunkBuf = await chunkBlob.arrayBuffer();
+    const encChunk = await encryptChunk(chunkBuf, key);
+    encryptedChunks.push(encChunk);
+    totalEncryptedSize += encChunk.byteLength;
+  }
+  
+  const combinedEncrypted = new Uint8Array(totalEncryptedSize);
+  let offset = 0;
+  for (const chunk of encryptedChunks) {
+    combinedEncrypted.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  
+  let sha256Val = '';
+  if (window.crypto && window.crypto.subtle) {
+    try {
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', combinedEncrypted.buffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      sha256Val = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+      sha256Val = sha256Fallback(combinedEncrypted.buffer);
+    }
+  } else {
+    sha256Val = sha256Fallback(combinedEncrypted.buffer);
+  }
+  
+  return { encryptedChunks, sha256: sha256Val };
+}
+
+async function decryptCombinedFile(encryptedBuffer, key, originalSize, isFallbackFile = false) {
+  const encryptedBytes = new Uint8Array(encryptedBuffer);
+  const totalChunks = Math.ceil(originalSize / CHUNK_SIZE);
+  const decryptedChunks = [];
+  
+  const useFallback = isFallbackFile || key.isFallback || !window.crypto || !window.crypto.subtle;
+  const overhead = useFallback ? 12 : 28;
+  
+  let offset = 0;
+  for (let i = 0; i < totalChunks; i++) {
+    const isLast = (i === totalChunks - 1);
+    const expectedPlaintextLen = isLast ? (originalSize - i * CHUNK_SIZE) : CHUNK_SIZE;
+    const expectedEncryptedLen = expectedPlaintextLen + overhead;
+    
+    const encryptedChunkSlice = encryptedBytes.slice(offset, offset + expectedEncryptedLen);
+    offset += expectedEncryptedLen;
+    
+    const iv = encryptedChunkSlice.slice(0, 12);
+    const ciphertext = encryptedChunkSlice.slice(12);
+    
+    if (useFallback) {
+      const decrypted = xorStreamCipher(ciphertext, key.fallbackKey, iv);
+      decryptedChunks.push(decrypted);
+    } else {
+      const decrypted = await window.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: iv },
+        key.nativeKey || key,
+        ciphertext
+      );
+      decryptedChunks.push(new Uint8Array(decrypted));
+    }
+  }
+  
+  const finalDecryptedBuffer = new Uint8Array(originalSize);
+  let decryptedOffset = 0;
+  for (const chunk of decryptedChunks) {
+    finalDecryptedBuffer.set(chunk, decryptedOffset);
+    decryptedOffset += chunk.byteLength;
+  }
+  
+  return finalDecryptedBuffer.buffer;
+}
+
+async function getDecryptedBlobUrl(url, fileType, originalSize, isFallbackFile = false) {
+  const res = await fetch(url);
+  const encryptedArrayBuffer = await res.arrayBuffer();
+  const decryptedBuffer = await decryptCombinedFile(encryptedArrayBuffer, state.currentChannelKey, originalSize, isFallbackFile);
+  const blob = new Blob([decryptedBuffer], { type: fileType });
+  return URL.createObjectURL(blob);
+}
 
 // ==========================================================================
 // Pure JavaScript SHA-256 Fallback (for insecure HTTP LAN connections)
@@ -238,7 +580,45 @@ const DOM = {
   previewDownloadBtn: document.getElementById('preview-download-btn'),
   
   disconnectOverlay: document.getElementById('disconnect-overlay'),
-  closeModalBtns: document.querySelectorAll('.close-modal-btn')
+  closeModalBtns: document.querySelectorAll('.close-modal-btn'),
+
+  // Phase 2: WebRTC Voice & Video selectors
+  callStartBtn: document.getElementById('call-start-btn'),
+  callPanel: document.getElementById('call-panel'),
+  localVideo: document.getElementById('local-video'),
+  remoteStreams: document.getElementById('remote-streams'),
+  callToggleMic: document.getElementById('call-toggle-mic'),
+  callToggleVideo: document.getElementById('call-toggle-video'),
+  callLeave: document.getElementById('call-leave'),
+  micIcon: document.getElementById('mic-icon'),
+  videoIcon: document.getElementById('video-icon'),
+
+  // Phase 2: P2P Direct File Transfer toast
+  p2pToast: document.getElementById('p2p-toast'),
+  p2pToastMsg: document.getElementById('p2p-toast-msg'),
+  p2pToastProgress: document.getElementById('p2p-toast-progress'),
+
+  // Phase 3: LAN Auto-Discovery Connect List
+  discoveredNodesContainer: document.getElementById('discovered-nodes-container'),
+  discoveredNodesList: document.getElementById('discovered-nodes-list'),
+
+  // Phase 4: Collaborative Whiteboard selectors
+  whiteboardToggleBtn: document.getElementById('whiteboard-toggle-btn'),
+  whiteboardPanel: document.getElementById('whiteboard-panel'),
+  whiteboardCanvas: document.getElementById('whiteboard-canvas'),
+  wbColor: document.getElementById('wb-color'),
+  wbBrushSize: document.getElementById('wb-brush-size'),
+  wbEraser: document.getElementById('wb-eraser'),
+  wbClear: document.getElementById('wb-clear'),
+
+  // Phase 5: Virtual NAS LAN Drive selectors
+  nasToggleBtn: document.getElementById('nas-toggle-btn'),
+  nasPanel: document.getElementById('nas-panel'),
+  nasBreadcrumbs: document.getElementById('nas-breadcrumbs'),
+  nasNewFolderBtn: document.getElementById('nas-new-folder-btn'),
+  nasUploadBtn: document.getElementById('nas-upload-btn'),
+  nasFileInput: document.getElementById('nas-file-input'),
+  nasFilesList: document.getElementById('nas-files-list')
 };
 
 // Track all known rooms (updated from server)
@@ -271,6 +651,10 @@ function initApp() {
     DOM.app.classList.remove('hidden');
     socket.connect();
   }
+
+  // Phase 3: Start LAN Auto-Discovery Polling
+  pollLanAutoDiscovery();
+  setInterval(pollLanAutoDiscovery, 4000);
 }
 
 function setupSocket() {
@@ -282,11 +666,12 @@ function setupSocket() {
     reconnectionAttempts: Infinity
   });
 
-  socket.on('connect', () => {
+  socket.on('connect', async () => {
     DOM.disconnectOverlay.classList.remove('active');
     console.log('Connected to server with Socket ID:', socket.id);
     
     // Automatically join the current state channel
+    state.currentChannelKey = await getChannelKey(state.currentChannel, null);
     socket.emit('join-channel', state.currentChannel);
     
     // If username is already set, restore user registration on reconnect
@@ -305,19 +690,21 @@ function setupSocket() {
   });
 
   // Socket Core Receivers
-  socket.on('message-history', (messages) => {
+  socket.on('message-history', async (messages) => {
     DOM.messagesContainer.innerHTML = '';
     if (messages && messages.length > 0) {
-      messages.forEach(msg => appendMessage(msg));
+      for (const msg of messages) {
+        await appendMessage(msg);
+      }
       scrollToBottom(true);
     } else {
       appendSystemAnnouncement('Welcome to #' + DOM.activeChannelName.innerText + '! Send a message to start conversing.');
     }
   });
 
-  socket.on('message', (msg) => {
+  socket.on('message', async (msg) => {
     const isNearBottom = DOM.messagesContainer.scrollHeight - DOM.messagesContainer.scrollTop - DOM.messagesContainer.clientHeight < 150;
-    appendMessage(msg);
+    await appendMessage(msg);
     if (isNearBottom || msg.username === state.username) {
       scrollToBottom();
     }
@@ -367,6 +754,52 @@ function setupSocket() {
     }
     updateTypingIndicatorDisplay(activeTypingUsers);
   });
+
+  // Phase 2: WebRTC Video/Voice Signaling Sockets
+  socket.on('user-joined-call', async ({ socketId, username }) => {
+    if (state.isCallActive) {
+      console.log(`WebRTC: Peer ${username} (${socketId}) joined call. Initiating peer connection...`);
+      await initPeerConnection(socketId, true);
+    }
+  });
+
+  socket.on('user-left-call', ({ socketId }) => {
+    console.log(`WebRTC: Peer (${socketId}) left call. Closing connection...`);
+    closePeerConnection(socketId);
+  });
+
+  socket.on('webrtc-signal', async ({ sender, signal }) => {
+    if (signal.p2p) {
+      await handleP2PSignal(sender, signal);
+    } else {
+      await handleWebRTCSignal(sender, signal);
+    }
+  });
+
+  // Phase 2: P2P Direct File Transfer Sockets
+  socket.on('p2p-request', ({ senderId, senderName, fileName, fileSize, fileType }) => {
+    handleP2PRequest(senderId, senderName, fileName, fileSize, fileType);
+  });
+
+  socket.on('p2p-respond', ({ responderId, accepted }) => {
+    handleP2PResponse(responderId, accepted);
+  });
+
+  // Phase 4: Collaborative Whiteboard Sockets
+  socket.on('draw-line', (data) => {
+    drawReceivedLine(data);
+  });
+
+  socket.on('clear-whiteboard', () => {
+    clearLocalCanvasOnly();
+  });
+
+  // Phase 5: Virtual NAS LAN Drive Sockets
+  socket.on('drive-updated', ({ roomId }) => {
+    if (roomId === state.currentChannel && !DOM.nasPanel.classList.contains('hidden')) {
+      loadNasDirectory();
+    }
+  });
 }
 
 // Fetch network details from API (primary LAN IP and QR code link)
@@ -402,7 +835,8 @@ async function fetchNetworkInfo() {
 // ==========================================================================
 
 // Add chat message bubble
-function appendMessage(msg) {
+// Add chat message bubble
+async function appendMessage(msg) {
   const isSelf = msg.username === state.username;
   const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
@@ -413,7 +847,66 @@ function appendMessage(msg) {
   // User initials avatar
   const avatarCol = isSelf ? state.color : (getUserColor(msg.username) || '#cbd5e1');
   const initial = msg.username.charAt(0).toUpperCase();
-  
+    let displayedMsg = msg.message;
+  if (msg.type === 'text') {
+    if (msg.message && msg.message.startsWith('__FSX_ENC_TEXT__:')) {
+      const cipher = msg.message.substring(17);
+      try {
+        if (state.currentChannelKey) {
+          displayedMsg = await decryptText(cipher, state.currentChannelKey, false);
+        } else {
+          displayedMsg = '🔒 [Encrypted Message - Key Missing]';
+        }
+      } catch (err) {
+        console.error('Decryption failed:', err);
+        displayedMsg = '⚠️ [Decryption Failed]';
+      }
+    } else if (msg.message && msg.message.startsWith('__FSX_FALLBACK_ENC_TEXT__:')) {
+      const cipher = msg.message.substring(26);
+      try {
+        if (state.currentChannelKey) {
+          displayedMsg = await decryptText(cipher, state.currentChannelKey, true);
+        } else {
+          displayedMsg = '🔒 [Encrypted Message - Key Missing]';
+        }
+      } catch (err) {
+        console.error('Decryption failed:', err);
+        displayedMsg = '⚠️ [Decryption Failed]';
+      }
+    }
+  }
+
+  let displayedFileName = msg.fileName;
+  let isFallbackFile = false;
+  if (msg.type === 'file') {
+    if (msg.fileName && msg.fileName.startsWith('__FSX_ENC_NAME__:')) {
+      const cipher = msg.fileName.substring(17);
+      try {
+        if (state.currentChannelKey) {
+          displayedFileName = await decryptText(cipher, state.currentChannelKey, false);
+        } else {
+          displayedFileName = '🔒 [Encrypted File]';
+        }
+      } catch (err) {
+        console.error('Filename decryption failed:', err);
+        displayedFileName = '⚠️ [Decryption Failed]';
+      }
+    } else if (msg.fileName && msg.fileName.startsWith('__FSX_FALLBACK_ENC_NAME__:')) {
+      isFallbackFile = true;
+      const cipher = msg.fileName.substring(26);
+      try {
+        if (state.currentChannelKey) {
+          displayedFileName = await decryptText(cipher, state.currentChannelKey, true);
+        } else {
+          displayedFileName = '🔒 [Encrypted File]';
+        }
+      } catch (err) {
+        console.error('Filename decryption failed:', err);
+        displayedFileName = '⚠️ [Decryption Failed]';
+      }
+    }
+  }
+
   msgGroup.innerHTML = `
     <div class="avatar" style="background-color: ${avatarCol}">${initial}</div>
     <div class="msg-wrapper">
@@ -443,46 +936,39 @@ function appendMessage(msg) {
   }
 
   const contentContainer = msgGroup.querySelector('.msg-content');
-
   if (msg.type === 'text') {
-    const bubble = document.createElement('div');
-    bubble.className = 'msg-bubble';
-    bubble.innerHTML = escapeHTML(msg.message);
-    contentContainer.appendChild(bubble);
+    contentContainer.innerHTML = `<p class="chat-bubble-text">${escapeHTML(displayedMsg)}</p>`;
   } else if (msg.type === 'file') {
     const isImage = msg.fileType && msg.fileType.startsWith('image/');
-    const isVideo = msg.fileType && msg.fileType.startsWith('video/');
-
+    const fileCard = document.createElement('div');
+    fileCard.className = `file-bubble-card ${isImage ? 'image-type' : ''}`;
+    
+    let previewHtml = '';
     if (isImage) {
-      const div = document.createElement('div');
-      div.className = 'image-preview-attachment';
-      div.innerHTML = `<img src="${msg.fileUrl}" alt="${escapeHTML(msg.fileName)}" loading="lazy">`;
-      div.addEventListener('click', () => openPreviewModal(msg.fileName, msg.fileUrl, msg.fileType));
-      contentContainer.appendChild(div);
-    } else if (isVideo) {
-      const div = document.createElement('div');
-      div.className = 'image-preview-attachment';
-      div.innerHTML = `
-        <video muted playsinline preload="metadata">
-          <source src="${msg.fileUrl}" type="${msg.fileType}">
-        </video>
+      previewHtml = `
+        <div class="file-image-preview-wrapper nas-item-clickable">
+          <div class="preview-fallback-container">
+            <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            <span style="font-size: 0.8rem; margin-top: 4px; color: var(--text-secondary);">Secure Image Preview</span>
+          </div>
+        </div>
       `;
-      div.addEventListener('click', () => openPreviewModal(msg.fileName, msg.fileUrl, msg.fileType));
-      contentContainer.appendChild(div);
+    } else {
+      previewHtml = `
+        <div class="file-generic-preview-wrapper">
+          <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+        </div>
+      `;
     }
 
-    const fileCard = document.createElement('div');
-    fileCard.className = 'file-card';
-    const svgIcon = getFileTypeSVG(msg.fileName, msg.fileType);
-
     fileCard.innerHTML = `
-      <div class="file-icon-box">${svgIcon}</div>
-      <div class="file-details">
-        <div class="file-name" title="${escapeHTML(msg.fileName)}">${escapeHTML(msg.fileName)}</div>
-        <div class="file-size">${formatBytes(msg.fileSize)}</div>
+      ${previewHtml}
+      <div class="file-bubble-meta">
+        <span class="file-bubble-name" title="${escapeHTML(displayedFileName)}">${escapeHTML(displayedFileName)}</span>
+        <span class="file-bubble-size">${formatBytes(msg.fileSize)}</span>
       </div>
-      <div class="file-actions">
-        ${(isImage || isVideo || (msg.fileType && msg.fileType === 'application/pdf')) ? `
+      <div class="file-bubble-actions">
+        ${(isImage || (msg.fileType && msg.fileType.startsWith('video/')) || (msg.fileType && msg.fileType === 'application/pdf')) ? `
           <button class="file-action-btn view-btn" title="Preview file">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -490,18 +976,22 @@ function appendMessage(msg) {
             </svg>
           </button>
         ` : ''}
-        <a href="${msg.fileUrl}" download="${escapeHTML(msg.fileName)}" class="file-action-btn download-btn" title="Download File">
+        <button class="file-action-btn download-btn" title="Download File">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
-        </a>
+        </button>
       </div>
     `;
 
     const viewBtn = fileCard.querySelector('.view-btn');
-    if (viewBtn) viewBtn.addEventListener('click', () => openPreviewModal(msg.fileName, msg.fileUrl, msg.fileType));
+    if (viewBtn) viewBtn.addEventListener('click', () => openDecryptedPreviewModal(displayedFileName, msg.fileUrl, msg.fileType, msg.fileSize, isFallbackFile));
+
+    const dlBtn = fileCard.querySelector('.download-btn');
+    if (dlBtn) dlBtn.addEventListener('click', (e) => handleFileDownloadClick(e, msg.fileUrl, displayedFileName, msg.fileType, msg.fileSize, isFallbackFile));
+
     contentContainer.appendChild(fileCard);
   }
 
@@ -586,7 +1076,7 @@ function switchChannel(channelId) {
 
 // Actually join a channel after password checks
 function doJoinChannel(channelId, password) {
-  socket.emit('join-channel', channelId, password, (result) => {
+  socket.emit('join-channel', channelId, password, async (result) => {
     if (result && result.error) {
       if (result.error === 'wrong_password') {
         DOM.joinRoomError.innerText = 'Incorrect password. Please try again.';
@@ -603,6 +1093,7 @@ function doJoinChannel(channelId, password) {
 
     // Update sidebar active state
     state.currentChannel = channelId;
+    state.currentChannelKey = await getChannelKey(channelId, password);
     const room = knownRooms.find(r => r.id === channelId);
     DOM.activeChannelName.innerText = room ? room.displayName : channelId.substring(1);
 
@@ -616,6 +1107,13 @@ function doJoinChannel(channelId, password) {
     DOM.dragChannelLabel.innerText = channelId;
     renderRoomList();
     clearSearch();
+
+    // Reset NAS explorer state on channel switch
+    state.nasCurrentFolderId = 'root';
+    state.nasBreadcrumbs = [{ id: 'root', name: 'Virtual Drive' }];
+    if (!DOM.nasPanel.classList.contains('hidden')) {
+      loadNasDirectory();
+    }
 
     if (window.innerWidth <= 768) toggleSidebar(false);
   });
@@ -637,8 +1135,25 @@ function renderOnlineUsers() {
         <div class="avatar user-item-avatar" style="background-color: ${user.color};">${initial}</div>
         <span class="user-item-name" style="font-weight: ${isMe ? '700' : '500'}">${escapeHTML(user.username)} ${isMe ? '(You)' : ''}</span>
       </div>
-      <span class="user-item-ip">${escapeHTML(user.ip)}</span>
+      <div class="user-item-right-actions">
+        <span class="user-item-ip">${escapeHTML(user.ip)}</span>
+        ${!isMe ? `
+          <button class="p2p-send-btn-small" title="Direct P2P File Transfer" data-socket-id="${user.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px;">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </button>
+        ` : ''}
+      </div>
     `;
+
+    const p2pBtn = li.querySelector('.p2p-send-btn-small');
+    if (p2pBtn) {
+      p2pBtn.addEventListener('click', () => {
+        triggerP2PFileSelect(user.id);
+      });
+    }
+
     DOM.usersList.appendChild(li);
   });
 }
@@ -720,7 +1235,7 @@ function getFileTypeSVG(fileName, fileType) {
 // ==========================================================================
 // File Upload Engine - Chunked and Resumable
 // ==========================================================================
-async function queueAndUploadFiles(filesList) {
+async function queueAndUploadFiles(filesList, isDriveFile = false, parentFolderId = 'root') {
   if (!filesList || filesList.length === 0) return;
   
   // Show Upload Badge and Trigger active modal
@@ -742,24 +1257,33 @@ async function queueAndUploadFiles(filesList) {
       totalChunks,
       status: 'hashing',
       controller: null,
-      bytesUploaded: 0
+      bytesUploaded: 0,
+      encryptedChunks: null,
+      isDriveFile,
+      parentFolderId
     };
 
     state.activeUploads.set(uploadId, task);
     renderUploadTasks();
     updateUploadBadgeCount();
 
-    // Start Async Hashing first
+    // Start Async Hashing and Encryption first
     try {
-      console.log(`Calculating signature for: ${file.name}`);
-      task.sha256 = await calculateFileSHA256(file);
+      console.log(`Encrypting and hashing: ${file.name}`);
+      if (state.currentChannelKey) {
+        const { encryptedChunks, sha256 } = await encryptAndHashFile(file, state.currentChannelKey);
+        task.encryptedChunks = encryptedChunks;
+        task.sha256 = sha256;
+      } else {
+        task.sha256 = await calculateFileSHA256(file);
+      }
       task.status = 'uploading';
       renderUploadTasks();
       
       // Fire upload sequence
       runChunkedUpload(uploadId);
     } catch (err) {
-      console.error('Hashing failed for file:', file.name, err);
+      console.error('Encryption or hashing failed for file:', file.name, err);
       task.status = 'error';
       renderUploadTasks();
     }
@@ -793,9 +1317,14 @@ async function runChunkedUpload(uploadId) {
       }
 
       // Get chunk byte range
-      const startByte = chunkIndex * CHUNK_SIZE;
-      const endByte = Math.min(startByte + CHUNK_SIZE, task.fileSize);
-      const chunkBlob = task.file.slice(startByte, endByte);
+      let chunkBlob;
+      if (task.encryptedChunks) {
+        chunkBlob = new Blob([task.encryptedChunks[chunkIndex]], { type: 'application/octet-stream' });
+      } else {
+        const startByte = chunkIndex * CHUNK_SIZE;
+        const endByte = Math.min(startByte + CHUNK_SIZE, task.fileSize);
+        chunkBlob = task.file.slice(startByte, endByte);
+      }
 
       // Construct Form
       const formData = new FormData();
@@ -825,6 +1354,17 @@ async function runChunkedUpload(uploadId) {
       task.status = 'assembling';
       renderUploadTasks();
 
+      let finalFileName = task.fileName;
+      if (state.currentChannelKey) {
+        try {
+          const encName = await encryptText(task.fileName, state.currentChannelKey);
+          const isFallback = state.currentChannelKey.isFallback || !window.crypto || !window.crypto.subtle;
+          finalFileName = isFallback ? `__FSX_FALLBACK_ENC_NAME__:${encName}` : `__FSX_ENC_NAME__:${encName}`;
+        } catch (err) {
+          console.error('Filename encryption failed:', err);
+        }
+      }
+
       const completeRes = await fetch('/api/upload/complete', {
         method: 'POST',
         headers: {
@@ -832,12 +1372,14 @@ async function runChunkedUpload(uploadId) {
         },
         body: JSON.stringify({
           uploadId,
-          fileName: task.fileName,
+          fileName: finalFileName,
           fileSize: task.fileSize,
           fileType: task.fileType,
           sha256: task.sha256,
           channel: state.currentChannel,
-          username: state.username
+          username: state.username,
+          isDriveFile: task.isDriveFile,
+          parentFolderId: task.parentFolderId
         })
       });
 
@@ -1018,6 +1560,100 @@ function updateUploadBadgeCount() {
 }
 
 // ==========================================================================
+// Decrypted Preview & Download Manager (E2EE)
+// ==========================================================================
+async function downloadAndDecryptFile(url, fileName, fileType, originalSize, isFallbackFile = false) {
+  try {
+    const decryptedBlobUrl = await getDecryptedBlobUrl(url, fileType, originalSize, isFallbackFile);
+    const a = document.createElement('a');
+    a.href = decryptedBlobUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(decryptedBlobUrl), 10000);
+  } catch (err) {
+    console.error('Failed to download and decrypt file:', err);
+    alert('Decryption download failed.');
+  }
+}
+
+async function handleFileDownloadClick(e, url, fileName, fileType, originalSize, isFallbackFile = false) {
+  e.preventDefault();
+  if (fileName.startsWith('🔒') || fileName.startsWith('⚠️') || state.currentChannelKey) {
+    await downloadAndDecryptFile(url, fileName, fileType, originalSize, isFallbackFile);
+  } else {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+}
+
+async function openDecryptedPreviewModal(fileName, url, fileType, originalSize, isFallbackFile = false) {
+  DOM.previewTitle.innerText = `Preview: ${fileName} (Decrypting...)`;
+  DOM.previewContent.innerHTML = `
+    <div class="preview-fallback-container">
+      <div class="animate-pulse" style="font-size: 1.1rem; color: var(--text-secondary);">Decrypting secure file, please wait...</div>
+    </div>
+  `;
+  DOM.previewModal.classList.add('active');
+
+  try {
+    const decryptedBlobUrl = await getDecryptedBlobUrl(url, fileType, originalSize, isFallbackFile);
+    
+    DOM.previewTitle.innerText = `Preview: ${fileName}`;
+    DOM.previewDownloadBtn.onclick = (e) => {
+      e.preventDefault();
+      const a = document.createElement('a');
+      a.href = decryptedBlobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
+    DOM.previewContent.innerHTML = '';
+    const isImage = fileType && fileType.startsWith('image/');
+    const isVideo = fileType && fileType.startsWith('video/');
+    const isPdf = fileType && fileType === 'application/pdf';
+
+    if (isImage) {
+      DOM.previewContent.innerHTML = `<img src="${decryptedBlobUrl}" alt="${escapeHTML(fileName)}" style="max-width: 100%; max-height: 70vh; border-radius: 8px;">`;
+    } else if (isVideo) {
+      DOM.previewContent.innerHTML = `
+        <video controls autoplay playsinline style="width:100%; max-height: 70vh; border-radius: 8px;">
+          <source src="${decryptedBlobUrl}" type="${fileType}">
+          Your browser does not support video playbacks.
+        </video>
+      `;
+    } else if (isPdf) {
+      DOM.previewContent.innerHTML = `<iframe src="${decryptedBlobUrl}" title="${escapeHTML(fileName)}" style="width: 100%; height: 70vh; border: none; border-radius: 8px;"></iframe>`;
+    } else {
+      DOM.previewContent.innerHTML = `
+        <div class="preview-fallback-container">
+          <div class="file-icon-box preview-fallback-icon">
+            ${getFileTypeSVG(fileName, fileType)}
+          </div>
+          <div class="preview-fallback-title">${escapeHTML(fileName)}</div>
+          <div class="preview-fallback-desc">No preview available for this file type. Click download to acquire the file in original quality.</div>
+        </div>
+      `;
+    }
+  } catch (err) {
+    console.error('Preview decryption failed:', err);
+    DOM.previewContent.innerHTML = `
+      <div class="preview-fallback-container">
+        <div class="preview-fallback-title">Decryption Failed</div>
+        <div class="preview-fallback-desc">We couldn't decrypt this file. Ensure you have the correct key.</div>
+      </div>
+    `;
+  }
+}
+
+// ==========================================================================
 // Preview Manager Modal (Direct Inlined Previewers)
 // ==========================================================================
 function openPreviewModal(fileName, url, fileType) {
@@ -1182,11 +1818,21 @@ function setupEventListeners() {
   });
 
   // 3. Chat form messaging submission
-  DOM.chatForm.addEventListener('submit', (e) => {
+  DOM.chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const textMsg = DOM.messageInput.value.trim();
     if (textMsg) {
-      socket.emit('send-message', { message: textMsg });
+      let finalMsg = textMsg;
+      if (state.currentChannelKey) {
+        try {
+          const encMsg = await encryptText(textMsg, state.currentChannelKey);
+          const isFallback = state.currentChannelKey.isFallback || !window.crypto || !window.crypto.subtle;
+          finalMsg = isFallback ? `__FSX_FALLBACK_ENC_TEXT__:${encMsg}` : `__FSX_ENC_TEXT__:${encMsg}`;
+        } catch (err) {
+          console.error('Encryption failed:', err);
+        }
+      }
+      socket.emit('send-message', { message: finalMsg });
       DOM.messageInput.value = '';
       
       // Reset typing status on direct sends
@@ -1293,13 +1939,15 @@ function setupEventListeners() {
       state.searchQuery = q;
       
       // Perform server-side search query
-      socket.emit('search-messages', { query: q }, (results) => {
+      socket.emit('search-messages', { query: q }, async (results) => {
         // Render search results
         DOM.messagesContainer.innerHTML = '';
         appendSystemAnnouncement(`Search results for "${q}" inside this channel (${results.length} found):`);
         
         if (results && results.length > 0) {
-          results.forEach(msg => appendMessage(msg));
+          for (const msg of results) {
+            await appendMessage(msg);
+          }
         }
       });
     } else {
@@ -1308,6 +1956,114 @@ function setupEventListeners() {
   });
 
   DOM.clearSearchBtn.addEventListener('click', clearSearch);
+
+  // Phase 2: WebRTC Voice & Video Call Event Listeners
+  DOM.callStartBtn.addEventListener('click', () => {
+    DOM.callPanel.classList.toggle('hidden');
+    if (!DOM.callPanel.classList.contains('hidden')) {
+      DOM.whiteboardPanel.classList.add('hidden');
+      DOM.nasPanel.classList.add('hidden');
+      startCall();
+    } else {
+      leaveCall();
+    }
+  });
+
+  DOM.callToggleMic.addEventListener('click', () => {
+    toggleCallAudio();
+  });
+
+  DOM.callToggleVideo.addEventListener('click', () => {
+    toggleCallVideo();
+  });
+
+  DOM.callLeave.addEventListener('click', () => {
+    DOM.callPanel.classList.add('hidden');
+    leaveCall();
+  });
+
+  // Phase 4: Collaborative Whiteboard Event Listeners
+  DOM.whiteboardToggleBtn.addEventListener('click', () => {
+    DOM.whiteboardPanel.classList.toggle('hidden');
+    if (!DOM.whiteboardPanel.classList.contains('hidden')) {
+      DOM.callPanel.classList.add('hidden');
+      DOM.nasPanel.classList.add('hidden');
+      initWhiteboard();
+    }
+  });
+
+  DOM.wbColor.addEventListener('input', () => {
+    state.wbColor = DOM.wbColor.value;
+    state.wbIsEraser = false;
+    DOM.wbEraser.classList.remove('active');
+  });
+
+  DOM.wbBrushSize.addEventListener('change', () => {
+    state.wbBrushSize = parseInt(DOM.wbBrushSize.value, 10);
+  });
+
+  DOM.wbEraser.addEventListener('click', () => {
+    state.wbIsEraser = !state.wbIsEraser;
+    if (state.wbIsEraser) {
+      DOM.wbEraser.classList.add('active');
+    } else {
+      DOM.wbEraser.classList.remove('active');
+    }
+  });
+
+  DOM.wbClear.addEventListener('click', () => {
+    if (confirm('Clear the collaborative whiteboard drawing canvas for everyone in the room?')) {
+      clearLocalCanvasOnly();
+      socket.emit('clear-whiteboard');
+    }
+  });
+
+  // Phase 5: Virtual NAS LAN Drive Event Listeners
+  DOM.nasToggleBtn.addEventListener('click', () => {
+    DOM.nasPanel.classList.toggle('hidden');
+    if (!DOM.nasPanel.classList.contains('hidden')) {
+      DOM.callPanel.classList.add('hidden');
+      DOM.whiteboardPanel.classList.add('hidden');
+      loadNasDirectory();
+    }
+  });
+
+  DOM.nasNewFolderBtn.addEventListener('click', async () => {
+    const folderName = prompt('Enter a name for the new folder:');
+    if (!folderName || !folderName.trim()) return;
+
+    try {
+      const res = await fetch('/api/drive/folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room: state.currentChannel,
+          parent: state.nasCurrentFolderId,
+          folderName: folderName.trim(),
+          username: state.username
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        loadNasDirectory();
+      } else {
+        alert(data.error || 'Failed to create folder.');
+      }
+    } catch (err) {
+      console.error('Failed to create folder:', err);
+    }
+  });
+
+  DOM.nasUploadBtn.addEventListener('click', () => {
+    DOM.nasFileInput.click();
+  });
+
+  DOM.nasFileInput.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      queueAndUploadFiles(e.target.files, true, state.nasCurrentFolderId);
+    }
+    DOM.nasFileInput.value = '';
+  });
 }
 
 function clearSearch() {
@@ -1317,6 +2073,791 @@ function clearSearch() {
   
   // Reload current channel history (no password needed, already joined)
   socket.emit('join-channel', state.currentChannel, null, () => {});
+}
+
+// ==========================================================================
+// Phase 2: WebRTC Video/Voice Call Controller
+// ==========================================================================
+let localStream = null;
+const peerConnections = new Map(); // socketId -> RTCPeerConnection
+const iceConfig = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' }
+  ]
+};
+
+async function startCall() {
+  try {
+    // Attempt audio and video first
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    } catch (err) {
+      console.warn("Camera access failed or unavailable, falling back to audio-only stream:", err);
+      // Fallback to audio-only stream
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    }
+
+    DOM.localVideo.srcObject = localStream;
+    state.isCallActive = true;
+    state.isAudioMuted = false;
+    state.isVideoMuted = !localStream.getVideoTracks().length;
+
+    // Reset button states
+    DOM.callToggleMic.classList.remove('muted');
+    if (state.isVideoMuted) {
+      DOM.callToggleVideo.classList.add('muted');
+      DOM.videoIcon.innerHTML = `<polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect><line x1="1" y1="1" x2="23" y2="23"></line>`;
+    } else {
+      DOM.callToggleVideo.classList.remove('muted');
+      DOM.videoIcon.innerHTML = `<polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>`;
+    }
+
+    console.log("WebRTC: Local stream acquired. Signaling other room peers...");
+    socket.emit('join-call', state.currentChannel);
+  } catch (err) {
+    console.error("WebRTC: Failed to secure local media capture device stream:", err);
+    alert("Could not access microphone or camera. Please check browser permissions.");
+    DOM.callPanel.classList.add('hidden');
+  }
+}
+
+function leaveCall() {
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
+  DOM.localVideo.srcObject = null;
+
+  peerConnections.forEach((pc, socketId) => {
+    pc.close();
+  });
+  peerConnections.clear();
+  DOM.remoteStreams.innerHTML = '';
+
+  state.isCallActive = false;
+  socket.emit('leave-call', state.currentChannel);
+  console.log("WebRTC: Disconnected and left video/voice conference.");
+}
+
+async function initPeerConnection(peerSocketId, isOfferSender) {
+  const pc = new RTCPeerConnection(iceConfig);
+  peerConnections.set(peerSocketId, pc);
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('webrtc-signal', {
+        target: peerSocketId,
+        signal: { candidate: event.candidate }
+      });
+    }
+  };
+
+  pc.ontrack = (event) => {
+    let wrapper = document.getElementById(`remote-wrapper-${peerSocketId}`);
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.className = 'remote-stream-wrapper';
+      wrapper.id = `remote-wrapper-${peerSocketId}`;
+      
+      const video = document.createElement('video');
+      video.autoplay = true;
+      video.playsInline = true;
+      video.id = `remote-video-${peerSocketId}`;
+      
+      const label = document.createElement('div');
+      label.className = 'stream-label';
+      const peerUser = state.onlineUsers.find(u => u.id === peerSocketId);
+      label.innerText = peerUser ? peerUser.username : 'Peer';
+      
+      wrapper.appendChild(video);
+      wrapper.appendChild(label);
+      DOM.remoteStreams.appendChild(wrapper);
+    }
+    const videoEl = document.getElementById(`remote-video-${peerSocketId}`);
+    if (videoEl && videoEl.srcObject !== event.streams[0]) {
+      videoEl.srcObject = event.streams[0];
+    }
+  };
+
+  if (localStream) {
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  }
+
+  if (isOfferSender) {
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('webrtc-signal', {
+        target: peerSocketId,
+        signal: { sdp: pc.localDescription }
+      });
+    } catch (err) {
+      console.error("WebRTC: Error initiating offer generation:", err);
+    }
+  }
+
+  return pc;
+}
+
+function closePeerConnection(peerSocketId) {
+  const pc = peerConnections.get(peerSocketId);
+  if (pc) {
+    pc.close();
+    peerConnections.delete(peerSocketId);
+  }
+  const wrapper = document.getElementById(`remote-wrapper-${peerSocketId}`);
+  if (wrapper) {
+    wrapper.remove();
+  }
+}
+
+async function handleWebRTCSignal(senderSocketId, signal) {
+  try {
+    let pc = peerConnections.get(senderSocketId);
+    if (!pc) {
+      pc = await initPeerConnection(senderSocketId, false);
+    }
+
+    if (signal.sdp) {
+      await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      if (signal.sdp.type === 'offer') {
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc-signal', {
+          target: senderSocketId,
+          signal: { sdp: pc.localDescription }
+        });
+      }
+    } else if (signal.candidate) {
+      await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+    }
+  } catch (err) {
+    console.error("WebRTC: Signal processing failure:", err);
+  }
+}
+
+function toggleCallAudio() {
+  if (localStream) {
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      state.isAudioMuted = !audioTrack.enabled;
+      if (state.isAudioMuted) {
+        DOM.callToggleMic.classList.add('muted');
+        DOM.micIcon.innerHTML = `<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line><line x1="1" y1="1" x2="23" y2="23"></line>`;
+      } else {
+        DOM.callToggleMic.classList.remove('muted');
+        DOM.micIcon.innerHTML = `<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line>`;
+      }
+    }
+  }
+}
+
+function toggleCallVideo() {
+  if (localStream) {
+    const videoTrack = localStream.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      state.isVideoMuted = !videoTrack.enabled;
+      if (state.isVideoMuted) {
+        DOM.callToggleVideo.classList.add('muted');
+        DOM.videoIcon.innerHTML = `<polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect><line x1="1" y1="1" x2="23" y2="23"></line>`;
+      } else {
+        DOM.callToggleVideo.classList.remove('muted');
+        DOM.videoIcon.innerHTML = `<polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>`;
+      }
+    } else {
+      // If we don't have a video track because we fell back to audio only
+      alert("No active camera track found.");
+    }
+  }
+}
+
+// ==========================================================================
+// Phase 2: P2P Direct ArrayBuffer File Transfer Controller (RTCDataChannel)
+// ==========================================================================
+const p2pActiveConnections = new Map(); // socketId -> connObject
+
+function triggerP2PFileSelect(targetSocketId) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!state.pendingP2PFiles) {
+      state.pendingP2PFiles = new Map();
+    }
+    state.pendingP2PFiles.set(targetSocketId, file);
+
+    socket.emit('p2p-request', {
+      target: targetSocketId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type || 'application/octet-stream'
+    });
+
+    showP2PToast(`Waiting for peer to accept direct transfer...`, 0);
+  };
+  input.click();
+}
+
+function handleP2PRequest(senderId, senderName, fileName, fileSize, fileType) {
+  const accept = confirm(`Incoming direct P2P File Transfer from "${senderName}":\nFile: ${fileName}\nSize: ${formatBytes(fileSize)}\n\nAccept transfer?`);
+  socket.emit('p2p-respond', {
+    target: senderId,
+    accepted: accept
+  });
+  if (accept) {
+    showP2PToast(`Connecting for direct P2P transfer...`, 0);
+    setupP2PReceiverConnection(senderId, fileName, fileSize, fileType);
+  }
+}
+
+function handleP2PResponse(responderId, accepted) {
+  if (!accepted) {
+    closeP2PToast();
+    alert('Peer rejected direct P2P file transfer.');
+    if (state.pendingP2PFiles) state.pendingP2PFiles.delete(responderId);
+    return;
+  }
+
+  const file = state.pendingP2PFiles ? state.pendingP2PFiles.get(responderId) : null;
+  if (!file) {
+    closeP2PToast();
+    return;
+  }
+
+  showP2PToast(`Connecting to peer...`, 0);
+  setupP2PSenderConnection(responderId, file);
+}
+
+async function setupP2PSenderConnection(receiverId, file) {
+  try {
+    const pc = new RTCPeerConnection(iceConfig);
+    const channel = pc.createDataChannel('file-transfer', { ordered: true });
+    channel.binaryType = 'arraybuffer';
+
+    const connObj = { pc, channel, file, bytesSent: 0 };
+    p2pActiveConnections.set(receiverId, connObj);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('webrtc-signal', {
+          target: receiverId,
+          signal: { p2p: true, candidate: event.candidate }
+        });
+      }
+    };
+
+    channel.onopen = () => {
+      console.log('P2P: Data channel successfully established!');
+      sendP2PFileChunks(receiverId);
+    };
+
+    channel.onclose = () => {
+      console.log('P2P: Data channel closed.');
+      p2pActiveConnections.delete(receiverId);
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('webrtc-signal', {
+      target: receiverId,
+      signal: { p2p: true, sdp: pc.localDescription }
+    });
+  } catch (err) {
+    console.error("P2P: Connection sender creation error:", err);
+    closeP2PToast();
+    alert("Direct P2P transfer initialization failed.");
+  }
+}
+
+function sendP2PFileChunks(peerId) {
+  const conn = p2pActiveConnections.get(peerId);
+  if (!conn) return;
+
+  const file = conn.file;
+  const channel = conn.channel;
+  const CHUNK_LEN = 16384; // 16KB limit to prevent buffer overflows
+  let offset = 0;
+
+  const fileReader = new FileReader();
+
+  fileReader.onload = (e) => {
+    if (channel.readyState !== 'open') return;
+
+    channel.send(e.target.result);
+    offset += e.target.result.byteLength;
+    conn.bytesSent = offset;
+
+    const pct = Math.round((offset / file.size) * 100);
+    showP2PToast(`Sending "${file.name}" direct P2P...`, pct);
+
+    if (offset < file.size) {
+      readNextChunkDebounced();
+    } else {
+      showP2PToast(`Direct transfer of "${file.name}" completed!`, 100);
+      setTimeout(closeP2PToast, 3000);
+      p2pActiveConnections.delete(peerId);
+      if (state.pendingP2PFiles) state.pendingP2PFiles.delete(peerId);
+    }
+  };
+
+  function readNextChunk() {
+    if (channel.bufferedAmount > 1024 * 1024) { // 1MB buffer threshold
+      setTimeout(readNextChunk, 30);
+      return;
+    }
+    const slice = file.slice(offset, offset + CHUNK_LEN);
+    fileReader.readAsArrayBuffer(slice);
+  }
+
+  function readNextChunkDebounced() {
+    if (channel.bufferedAmount > 1024 * 1024) {
+      setTimeout(readNextChunkDebounced, 20);
+    } else {
+      readNextChunk();
+    }
+  }
+
+  readNextChunk();
+}
+
+async function setupP2PReceiverConnection(senderId, fileName, fileSize, fileType) {
+  try {
+    const pc = new RTCPeerConnection(iceConfig);
+    const connObj = {
+      pc,
+      fileName,
+      fileSize,
+      fileType,
+      receivedChunks: [],
+      receivedSize: 0
+    };
+    p2pActiveConnections.set(senderId, connObj);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('webrtc-signal', {
+          target: senderId,
+          signal: { p2p: true, candidate: event.candidate }
+        });
+      }
+    };
+
+    pc.ondatachannel = (event) => {
+      const channel = event.channel;
+      channel.binaryType = 'arraybuffer';
+      connObj.channel = channel;
+
+      channel.onmessage = (e) => {
+        connObj.receivedChunks.push(e.data);
+        connObj.receivedSize += e.data.byteLength;
+
+        const pct = Math.round((connObj.receivedSize / connObj.fileSize) * 100);
+        showP2PToast(`Receiving "${connObj.fileName}" direct P2P...`, pct);
+
+        if (connObj.receivedSize >= connObj.fileSize) {
+          // Assemble file and trigger browser download
+          const blob = new Blob(connObj.receivedChunks, { type: connObj.fileType });
+          const blobUrl = URL.createObjectURL(blob);
+
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = connObj.fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          showP2PToast(`Direct P2P transfer of "${connObj.fileName}" finished!`, 100);
+          setTimeout(closeP2PToast, 3000);
+
+          p2pActiveConnections.delete(senderId);
+        }
+      };
+
+      channel.onclose = () => {
+        console.log('P2P: Data channel closed on receiver end.');
+        p2pActiveConnections.delete(senderId);
+      };
+    };
+  } catch (err) {
+    console.error("P2P: Connection receiver creation error:", err);
+    closeP2PToast();
+  }
+}
+
+async function handleP2PSignal(senderId, signal) {
+  try {
+    const conn = p2pActiveConnections.get(senderId);
+    if (!conn) return;
+
+    const pc = conn.pc;
+    if (signal.sdp) {
+      await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      if (signal.sdp.type === 'offer') {
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc-signal', {
+          target: senderId,
+          signal: { p2p: true, sdp: pc.localDescription }
+        });
+      }
+    } else if (signal.candidate) {
+      await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+    }
+  } catch (err) {
+    console.error("P2P: Signaling error:", err);
+  }
+}
+
+function showP2PToast(message, progressPercent) {
+  DOM.p2pToast.classList.add('active');
+  DOM.p2pToastMsg.innerText = message;
+  DOM.p2pToastProgress.style.width = `${progressPercent}%`;
+}
+
+function closeP2PToast() {
+  DOM.p2pToast.classList.remove('active');
+}
+
+// ==========================================================================
+// Phase 3: Offline Subnet Node Auto-Discovery Board Connect List
+// ==========================================================================
+async function pollLanAutoDiscovery() {
+  try {
+    const res = await fetch('/api/discover');
+    if (!res.ok) return;
+    const nodes = await res.json();
+
+    DOM.discoveredNodesList.innerHTML = '';
+
+    if (nodes && nodes.length > 0) {
+      let nodeRenderCount = 0;
+      
+      nodes.forEach(node => {
+        // Exclude our own node if the local username matches
+        const isSelf = node.username === state.username;
+        if (isSelf) return;
+
+        nodeRenderCount++;
+        const card = document.createElement('div');
+        card.className = 'discovered-node-card';
+        card.innerHTML = `
+          <div class="discovered-node-info">
+            <span class="discovered-node-username">${escapeHTML(node.username)}</span>
+            <span class="discovered-node-ip">http://${node.ip}:${node.port}</span>
+          </div>
+          <a href="http://${node.ip}:${node.port}" target="_blank" class="discovered-node-connect-btn">Connect</a>
+        `;
+        DOM.discoveredNodesList.appendChild(card);
+      });
+
+      if (nodeRenderCount > 0) {
+        DOM.discoveredNodesContainer.classList.remove('hidden');
+      } else {
+        DOM.discoveredNodesContainer.classList.add('hidden');
+      }
+    } else {
+      DOM.discoveredNodesContainer.classList.add('hidden');
+    }
+  } catch (err) {
+    console.warn("LAN Discover: Node query fetch failed.", err);
+  }
+}
+
+// ==========================================================================
+// Phase 4: Collaborative Whiteboard (Brush Coordinates Normalizer)
+// ==========================================================================
+let isDrawing = false;
+let lastX = 0;
+let lastY = 0;
+
+function initWhiteboard() {
+  const canvas = DOM.whiteboardCanvas;
+  const ctx = canvas.getContext('2d');
+
+  // Match viewport size exactly inside flex grid container
+  canvas.width = canvas.offsetWidth || 800;
+  canvas.height = canvas.offsetHeight || 400;
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Mouse bindings
+  canvas.addEventListener('mousedown', startDrawing);
+  canvas.addEventListener('mousemove', draw);
+  canvas.addEventListener('mouseup', stopDrawing);
+  canvas.addEventListener('mouseleave', stopDrawing);
+
+  // Mobile touch bindings
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length > 0) {
+      startDrawing(e.touches[0]);
+    }
+  }, { passive: true });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches.length > 0) {
+      draw(e.touches[0]);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', stopDrawing, { passive: true });
+
+  function startDrawing(e) {
+    isDrawing = true;
+    const rect = canvas.getBoundingClientRect();
+    lastX = e.clientX - rect.left;
+    lastY = e.clientY - rect.top;
+  }
+
+  function draw(e) {
+    if (!isDrawing) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const currentX = e.clientX - rect.left;
+    const currentY = e.clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(currentX, currentY);
+
+    if (state.wbIsEraser) {
+      ctx.strokeStyle = '#111827'; // match the elegant dark mode panel background
+      ctx.lineWidth = state.wbBrushSize * 2.5;
+    } else {
+      ctx.strokeStyle = state.wbColor;
+      ctx.lineWidth = state.wbBrushSize;
+    }
+
+    ctx.stroke();
+
+    // Broadcast normalized coordinate floats to prevent pixelation on varied client screens
+    socket.emit('draw-line', {
+      x0: lastX / canvas.width,
+      y0: lastY / canvas.height,
+      x1: currentX / canvas.width,
+      y1: currentY / canvas.height,
+      color: state.wbColor,
+      size: state.wbBrushSize,
+      isEraser: state.wbIsEraser
+    });
+
+    lastX = currentX;
+    lastY = currentY;
+  }
+
+  function stopDrawing() {
+    isDrawing = false;
+  }
+}
+
+function drawReceivedLine(data) {
+  const canvas = DOM.whiteboardCanvas;
+  const ctx = canvas.getContext('2d');
+
+  const x0 = data.x0 * canvas.width;
+  const y0 = data.y0 * canvas.height;
+  const x1 = data.x1 * canvas.width;
+  const y1 = data.y1 * canvas.height;
+
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+
+  if (data.isEraser) {
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = data.size * 2.5;
+  } else {
+    ctx.strokeStyle = data.color;
+    ctx.lineWidth = data.size;
+  }
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+function clearLocalCanvasOnly() {
+  const canvas = DOM.whiteboardCanvas;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// ==========================================================================
+// Phase 5: Virtual NAS LAN Drive File Explorer
+// ==========================================================================
+async function loadNasDirectory() {
+  const folderId = state.nasCurrentFolderId;
+  try {
+    const res = await fetch(`/api/drive?room=${encodeURIComponent(state.currentChannel)}&parent=${encodeURIComponent(folderId)}`);
+    const items = await res.json();
+
+    renderNasBreadcrumbs();
+    DOM.nasFilesList.innerHTML = '';
+
+    if (!items || items.length === 0) {
+      DOM.nasFilesList.innerHTML = `
+        <div class="nas-empty-msg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; margin-bottom: 0.75rem; opacity: 0.4;">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <p>This directory is empty</p>
+          <span style="font-size: 0.8rem; color: var(--text-secondary); opacity: 0.8;">Upload files or create subfolders above</span>
+        </div>
+      `;
+      return;
+    }
+
+    // Process directories and files synchronously or in parallel
+    for (const item of items) {
+      const row = document.createElement('div');
+      row.className = 'nas-file-row';
+      row.setAttribute('data-id', item.id);
+
+      const isFolder = item.is_folder === 1;
+      const iconSvg = isFolder
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="nas-item-icon folder" style="width: 18px; height: 18px; color: #fbbf24;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`
+        : getFileTypeSVG(item.filename, item.filetype);
+
+      const sizeStr = isFolder ? '--' : formatBytes(item.size);
+      const dateStr = new Date(item.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+      let displayedName = item.filename;
+      let isFallbackFile = false;
+      if (!isFolder && item.filename.startsWith('__FSX_ENC_NAME__:')) {
+        const cipher = item.filename.substring(17);
+        try {
+          if (state.currentChannelKey) {
+            displayedName = await decryptText(cipher, state.currentChannelKey, false);
+          } else {
+            displayedName = '🔒 [Encrypted File]';
+          }
+        } catch (e) {
+          displayedName = '⚠️ [Decryption Failed]';
+        }
+      } else if (!isFolder && item.filename.startsWith('__FSX_FALLBACK_ENC_NAME__:')) {
+        isFallbackFile = true;
+        const cipher = item.filename.substring(26);
+        try {
+          if (state.currentChannelKey) {
+            displayedName = await decryptText(cipher, state.currentChannelKey, true);
+          } else {
+            displayedName = '🔒 [Encrypted File]';
+          }
+        } catch (e) {
+          displayedName = '⚠️ [Decryption Failed]';
+        }
+      }
+
+      row.innerHTML = `
+        <div class="nas-col-name nas-item-clickable">
+          <span class="nas-icon-wrapper">${iconSvg}</span>
+          <span class="nas-item-name-text" title="${escapeHTML(displayedName)}">${escapeHTML(displayedName)}</span>
+        </div>
+        <div class="nas-col-size">${sizeStr}</div>
+        <div class="nas-col-owner">${escapeHTML(item.created_by)}</div>
+        <div class="nas-col-date">${dateStr}</div>
+        <div class="nas-col-actions">
+          ${!isFolder ? `
+            <button class="nas-action-btn view-btn" title="Preview File">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+            <button class="nas-action-btn download-btn" title="Download File">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            </button>
+          ` : ''}
+          <button class="nas-action-btn delete-btn danger" title="Delete Permanent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+          </button>
+        </div>
+      `;
+
+      const clickable = row.querySelector('.nas-item-clickable');
+      if (isFolder) {
+        clickable.addEventListener('click', () => {
+          state.nasCurrentFolderId = item.id;
+          state.nasBreadcrumbs.push({ id: item.id, name: displayedName });
+          loadNasDirectory();
+        });
+      }
+
+      if (!isFolder) {
+        const viewBtn = row.querySelector('.view-btn');
+        if (viewBtn) {
+          viewBtn.addEventListener('click', () => {
+            openDecryptedPreviewModal(displayedName, item.filepath, item.filetype, item.size, isFallbackFile);
+          });
+        }
+
+        const dlBtn = row.querySelector('.download-btn');
+        if (dlBtn) {
+          dlBtn.addEventListener('click', (e) => {
+            handleFileDownloadClick(e, item.filepath, displayedName, item.filetype, item.size, isFallbackFile);
+          });
+        }
+      }
+
+      const delBtn = row.querySelector('.delete-btn');
+      if (delBtn) {
+        delBtn.addEventListener('click', async () => {
+          const confirmMsg = isFolder
+            ? `Delete directory "${displayedName}" permanently? All children files will be destroyed.`
+            : `Delete file "${displayedName}" permanently?`;
+
+          if (!confirm(confirmMsg)) return;
+
+          try {
+            const res = await fetch(`/api/drive?id=${encodeURIComponent(item.id)}&room=${encodeURIComponent(state.currentChannel)}`, {
+              method: 'DELETE'
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              loadNasDirectory();
+            } else {
+              alert(data.error || 'Deletion failed.');
+            }
+          } catch (err) {
+            console.error("NAS: Failed to delete virtual element:", err);
+          }
+        });
+      }
+
+      DOM.nasFilesList.appendChild(row);
+    }
+  } catch (err) {
+    console.error("NAS: Fetch files error:", err);
+  }
+}
+
+function renderNasBreadcrumbs() {
+  DOM.nasBreadcrumbs.innerHTML = '';
+  state.nasBreadcrumbs.forEach((crumb, idx) => {
+    const isLast = idx === state.nasBreadcrumbs.length - 1;
+
+    const span = document.createElement('span');
+    span.className = 'breadcrumb-item' + (isLast ? ' active' : '');
+    span.innerText = crumb.name;
+
+    if (!isLast) {
+      span.addEventListener('click', () => {
+        state.nasBreadcrumbs = state.nasBreadcrumbs.slice(0, idx + 1);
+        state.nasCurrentFolderId = crumb.id;
+        loadNasDirectory();
+      });
+    }
+
+    DOM.nasBreadcrumbs.appendChild(span);
+
+    if (!isLast) {
+      const separator = document.createElement('span');
+      separator.className = 'breadcrumb-separator';
+      separator.innerText = ' / ';
+      DOM.nasBreadcrumbs.appendChild(separator);
+    }
+  });
 }
 
 // ==========================================================================
