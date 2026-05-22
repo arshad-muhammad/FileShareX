@@ -39,7 +39,7 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // Configure Multer for temp chunk storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadId = req.body.uploadId;
+    const uploadId = req.body.uploadId || req.query.uploadId;
     if (!uploadId) {
       return cb(new Error('Missing uploadId'), null);
     }
@@ -50,7 +50,10 @@ const storage = multer.diskStorage({
     cb(null, chunkDir);
   },
   filename: (req, file, cb) => {
-    const chunkIndex = req.body.chunkIndex;
+    const chunkIndex = req.body.chunkIndex || req.query.chunkIndex;
+    if (chunkIndex === undefined) {
+      return cb(new Error('Missing chunkIndex'));
+    }
     cb(null, String(chunkIndex)); // Filename is just the index (e.g. '0', '1', '2')
   }
 });
@@ -150,8 +153,13 @@ app.get('/api/upload/status', (req, res) => {
 });
 
 // Handle Chunk Upload
-app.post('/api/upload/chunk', upload.single('chunk'), (req, res) => {
-  res.json({ success: true, message: 'Chunk uploaded successfully' });
+app.post('/api/upload/chunk', (req, res) => {
+  upload.single('chunk')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Chunk upload failed' });
+    }
+    res.json({ success: true, message: 'Chunk uploaded successfully' });
+  });
 });
 
 // Handle Chunk Upload Complete

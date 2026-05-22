@@ -1243,6 +1243,13 @@ button {
   gap: 16px;
 }
 
+.upload-manager-hint {
+  margin-bottom: 12px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
 .upload-task-item {
   display: flex;
   flex-direction: column;
@@ -1304,6 +1311,7 @@ button {
 .upload-task-status-badge.uploading { background-color: var(--accent-light); color: var(--accent-color); }
 .upload-task-status-badge.paused { background-color: var(--bg-sidebar-active); color: var(--text-secondary); }
 .upload-task-status-badge.completed { background-color: rgba(16, 185, 129, 0.1); color: #10b981; }
+.upload-task-status-badge.error { background-color: rgba(239, 68, 68, 0.12); color: #ef4444; }
 
 .upload-task-progress-section {
   display: flex;
@@ -1334,6 +1342,16 @@ button {
   min-width: 3rem;
   text-align: right;
   flex-shrink: 0;
+}
+
+.upload-task-error {
+  font-size: 0.74rem;
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  padding: 6px 8px;
+  line-height: 1.4;
 }
 
 .upload-task-actions {
