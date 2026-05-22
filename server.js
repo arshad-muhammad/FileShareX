@@ -36,26 +36,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// Configure Multer for temp chunk storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadId = req.body.uploadId;
-    if (!uploadId) {
-      return cb(new Error('Missing uploadId'), null);
-    }
-    const chunkDir = path.join(TMP_DIR, uploadId);
-    if (!fs.existsSync(chunkDir)) {
-      fs.mkdirSync(chunkDir, { recursive: true });
-    }
-    cb(null, chunkDir);
-  },
-  filename: (req, file, cb) => {
-    const chunkIndex = req.body.chunkIndex;
-    cb(null, String(chunkIndex)); // Filename is just the index (e.g. '0', '1', '2')
-  }
-});
-
-const upload = multer({ storage });
+// Use memory storage — req.body fields are fully available after multer buffers the request,
+// so we write the chunk to disk manually inside the route handler.
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Retrieve LAN IP Address(es)
 function getLocalIPs() {
@@ -150,8 +133,37 @@ app.get('/api/upload/status', (req, res) => {
 });
 
 // Handle Chunk Upload
-app.post('/api/upload/chunk', upload.single('chunk'), (req, res) => {
-  res.json({ success: true, message: 'Chunk uploaded successfully' });
+app.post('/api/upload/chunk', (req, res) => {
+  // Run multer first, then access req.body inside the callback where it is fully populated
+  upload.single('chunk')(req, res, (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      return res.status(500).json({ error: err.message });
+    }
+
+    const { uploadId, chunkIndex } = req.body;
+
+    if (!uploadId || chunkIndex === undefined) {
+      return res.status(400).json({ error: 'Missing uploadId or chunkIndex in request body' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No chunk file received' });
+    }
+
+    const chunkDir = path.join(TMP_DIR, uploadId);
+    if (!fs.existsSync(chunkDir)) {
+      fs.mkdirSync(chunkDir, { recursive: true });
+    }
+
+    const chunkPath = path.join(chunkDir, String(chunkIndex));
+    fs.writeFile(chunkPath, req.file.buffer, (writeErr) => {
+      if (writeErr) {
+        console.error('Failed to write chunk to disk:', writeErr);
+        return res.status(500).json({ error: 'Failed to save chunk' });
+      }
+      res.json({ success: true, message: 'Chunk uploaded successfully' });
+    });
+  });
 });
 
 // Handle Chunk Upload Complete

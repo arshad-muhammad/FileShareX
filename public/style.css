@@ -707,8 +707,8 @@ button {
 }
 
 .msg-group.self .msg-bubble {
-  background-color: var(--text-primary);
-  color: var(--text-on-accent);
+  background-color: var(--accent-color);
+  color: #ffffff;
   border-top-right-radius: 2px;
 }
 

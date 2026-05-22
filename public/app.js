@@ -272,7 +272,7 @@ function setupSocket() {
       messages.forEach(msg => appendMessage(msg));
       scrollToBottom(true);
     } else {
-      appendSystemAnnouncement('Welcome to #' + state.activeChannelName.innerText + '! Send a message to start conversing.');
+      appendSystemAnnouncement('Welcome to #' + DOM.activeChannelName.innerText + '! Send a message to start conversing.');
     }
   });
 
