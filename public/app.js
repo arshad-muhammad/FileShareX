@@ -628,6 +628,7 @@ async function runChunkedUpload(uploadId) {
       formData.append('chunkIndex', chunkIndex);
       formData.append('totalChunks', task.totalChunks);
       formData.append('fileName', task.fileName);
+      // Keep file blob last so multipart parsers can read metadata fields before handling file stream.
       formData.append('chunk', chunkBlob);
 
       // Perform Fetch Upload Chunk
@@ -641,7 +642,7 @@ async function runChunkedUpload(uploadId) {
         try {
           const chunkData = await chunkRes.json();
           if (chunkData && chunkData.error) chunkError = chunkData.error;
-        } catch (_) {
+        } catch (parseError) {
           // Ignore JSON parsing failures and use fallback message
         }
         throw new Error(chunkError);

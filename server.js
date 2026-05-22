@@ -52,7 +52,7 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     const chunkIndex = req.body.chunkIndex || req.query.chunkIndex;
     if (chunkIndex === undefined) {
-      return cb(new Error('Missing chunkIndex'));
+      return cb(new Error('Missing chunkIndex in request body or query parameters'));
     }
     cb(null, String(chunkIndex)); // Filename is just the index (e.g. '0', '1', '2')
   }
