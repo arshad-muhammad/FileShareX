@@ -77,17 +77,29 @@ qrcode.toDataURL(localUrl, { margin: 2, scale: 6 }, (err, url) => {
   }
 });
 
-// Helper to get unique filename to prevent overwriting
+// Helper to get unique filename to prevent overwriting.
+// Sanitizes the filename by generating a unique UUID to prevent OS-level and filesystem-level path traversal or naming errors (e.g. from E2EE filenames).
 function getUniqueFilename(originalName) {
-  const parsed = path.parse(originalName);
-  let fileName = originalName;
+  let ext = '';
+  const dotIndex = originalName.lastIndexOf('.');
+  if (dotIndex !== -1) {
+    const rawExt = originalName.slice(dotIndex);
+    // Ensure extension only contains alphanumeric characters and is short (<= 10 chars)
+    if (/^\.[a-zA-Z0-9]+$/.test(rawExt) && rawExt.length <= 10) {
+      ext = rawExt;
+    }
+  }
+
+  // Generate a safe unique random ID
+  const randomId = crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+  let safeFileName = `${randomId}${ext}`;
   let counter = 1;
   
-  while (fs.existsSync(path.join(UPLOADS_DIR, fileName))) {
-    fileName = `${parsed.name}_${counter}${parsed.ext}`;
+  while (fs.existsSync(path.join(UPLOADS_DIR, safeFileName))) {
+    safeFileName = `${randomId}_${counter}${ext}`;
     counter++;
   }
-  return fileName;
+  return safeFileName;
 }
 
 // ============================================================
