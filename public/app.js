@@ -631,7 +631,7 @@ async function runChunkedUpload(uploadId) {
       formData.append('chunk', chunkBlob);
 
       // Perform Fetch Upload Chunk
-      const chunkRes = await fetch(`/api/upload/chunk?uploadId=${encodeURIComponent(uploadId)}&chunkIndex=${chunkIndex}`, {
+      const chunkRes = await fetch('/api/upload/chunk', {
         method: 'POST',
         body: formData,
         signal: task.controller.signal
