@@ -3,17 +3,17 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --bg: #050505;
-  --surface: #0c0c0c;
-  --surface-2: #141414;
-  --border: #1a1a1a;
-  --border-hover: #2a2a2a;
-  --text: #ededed;
-  --text-secondary: #737373;
-  --text-dim: #525252;
-  --accent: #00d4aa;
-  --accent-dim: rgba(0, 212, 170, 0.12);
-  --accent-glow: rgba(0, 212, 170, 0.25);
+  --bg: #08080f;
+  --surface: #0d0d18;
+  --surface-2: #111120;
+  --border: rgba(255, 255, 255, 0.055);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --text: #e3e3f0;
+  --text-secondary: #8a8aac;
+  --text-dim: #46465e;
+  --accent: #5a5cf0;
+  --accent-dim: rgba(90, 92, 240, 0.10);
+  --accent-glow: rgba(90, 92, 240, 0.22);
   --warm: #fbbf24;
   --warm-dim: rgba(251, 191, 36, 0.10);
 }
@@ -200,7 +200,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .hero-title .highlight {
-  background: linear-gradient(135deg, var(--accent) 0%, #00f5c4 50%, var(--warm) 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, #a78bfa 50%, var(--warm) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -488,7 +488,7 @@ a { color: inherit; text-decoration: none; }
   justify-content: center;
   margin-bottom: 20px;
   background: var(--accent-dim);
-  border: 1px solid rgba(0, 212, 170, 0.08);
+  border: 1px solid rgba(90, 92, 240, 0.15);
 }
 
 .feature-icon svg {
