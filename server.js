@@ -15,10 +15,15 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e8, // 100MB socket buffer just in case
   cors: {
     origin: '*',
-  }
+  },
+  // Allow both transports for cloud hosting compatibility (Render, Railway, etc.)
+  transports: ['polling', 'websocket'],
+  allowUpgrades: true
 });
 
 const PORT = process.env.PORT || 3000;
+const IS_CLOUD = !!(process.env.RENDER_EXTERNAL_URL || process.env.RENDER || process.env.RAILWAY_STATIC_URL || process.env.FLY_APP_NAME);
+const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || null;
 const PERSISTENT_DIR = process.env.PERSISTENT_DIR || __dirname;
 const UPLOADS_DIR = path.join(PERSISTENT_DIR, 'uploads');
 const TMP_DIR = path.join(UPLOADS_DIR, 'tmp');
@@ -66,7 +71,8 @@ const primaryIP = localIPs.find(ip => ip.startsWith('192.168.')) ||
                   localIPs[0] || 
                   'localhost';
 
-const localUrl = `http://${primaryIP}:${PORT}`;
+// On cloud platforms, use the public URL provided by the hosting service
+const localUrl = PUBLIC_URL || `http://${primaryIP}:${PORT}`;
 
 // Generate QR Code for connection
 let primaryQrDataUrl = '';
@@ -149,12 +155,18 @@ function getRoomList() {
 
 // Fetch system network connection info
 app.get('/api/info', (req, res) => {
+  // On cloud platforms, provide the public URL instead of internal container IPs
+  const effectiveUrl = PUBLIC_URL || localUrl;
+  const effectiveIP = IS_CLOUD ? (PUBLIC_URL ? new URL(PUBLIC_URL).hostname : 'cloud-hosted') : primaryIP;
+  const effectiveIPs = IS_CLOUD ? [] : localIPs;
+
   res.json({
-    ips: localIPs,
-    primaryIP,
+    ips: effectiveIPs,
+    primaryIP: effectiveIP,
     port: PORT,
-    url: localUrl,
-    qr: primaryQrDataUrl
+    url: effectiveUrl,
+    qr: primaryQrDataUrl,
+    isCloud: IS_CLOUD
   });
 });
 
@@ -195,8 +207,26 @@ app.post('/api/rooms', (req, res) => {
 
 // --- Phase 3: LAN Auto-Discovery & Phase 5: Virtual NAS APIs ---
 const dgram = require('dgram');
-const udpSocket = dgram.createSocket('udp4');
+let udpSocket = null;
 const discoveredNodes = new Map();
+
+// Only create UDP socket on non-cloud environments (UDP is not supported on cloud platforms)
+if (!IS_CLOUD) {
+  try {
+    udpSocket = dgram.createSocket('udp4');
+    // Attach error handler immediately to prevent unhandled 'error' event crashes
+    udpSocket.on('error', (err) => {
+      console.warn('UDP Auto-Discovery socket error (non-fatal):', err.message);
+      try { udpSocket.close(); } catch (e) {}
+      udpSocket = null;
+    });
+  } catch (err) {
+    console.warn('Failed to create UDP socket (non-fatal):', err.message);
+    udpSocket = null;
+  }
+} else {
+  console.log('Cloud environment detected. UDP LAN Auto-Discovery disabled.');
+}
 
 // Periodically clean up offline nodes (inactive for > 12 seconds)
 setInterval(() => {
@@ -794,46 +824,50 @@ db.init().then(() => {
     console.log('\nScan connection QR code image generated inside server runtime.');
     console.log('======================================================\n');
 
-    // Start UDP auto-discovery beacon
-    try {
-      udpSocket.on('message', (msg, rinfo) => {
-        try {
-          const data = JSON.parse(msg.toString());
-          if (data.ip === primaryIP) return; // ignore self
-          discoveredNodes.set(data.ip, {
-            url: data.url,
-            ip: data.ip,
-            name: data.name,
-            lastSeen: Date.now()
-          });
-        } catch (e) {}
-      });
-
-      udpSocket.on('listening', () => {
-        try {
-          udpSocket.setBroadcast(true);
-          console.log('UDP LAN Auto-Discovery beacon listening on port 41234...');
-        } catch (e) {
-          console.warn('UDP setBroadcast failed:', e.message);
-        }
-      });
-
-      udpSocket.bind(41234, '0.0.0.0', () => {
-        // Start sending own UDP beacon every 4 seconds
-        setInterval(() => {
+    // Start UDP auto-discovery beacon (only on LAN, not cloud)
+    if (udpSocket) {
+      try {
+        udpSocket.on('message', (msg, rinfo) => {
           try {
-            const message = Buffer.from(JSON.stringify({
-              url: localUrl,
-              ip: primaryIP,
-              port: PORT,
-              name: os.hostname() || 'FileShareX-Host'
-            }));
-            udpSocket.send(message, 0, message.length, 41234, '255.255.255.255');
+            const data = JSON.parse(msg.toString());
+            if (data.ip === primaryIP) return; // ignore self
+            discoveredNodes.set(data.ip, {
+              url: data.url,
+              ip: data.ip,
+              name: data.name,
+              lastSeen: Date.now()
+            });
           } catch (e) {}
-        }, 4000);
-      });
-    } catch (udpErr) {
-      console.warn('Failed to bind UDP Auto-Discovery:', udpErr.message);
+        });
+
+        udpSocket.on('listening', () => {
+          try {
+            udpSocket.setBroadcast(true);
+            console.log('UDP LAN Auto-Discovery beacon listening on port 41234...');
+          } catch (e) {
+            console.warn('UDP setBroadcast failed:', e.message);
+          }
+        });
+
+        udpSocket.bind(41234, '0.0.0.0', () => {
+          // Start sending own UDP beacon every 4 seconds
+          setInterval(() => {
+            try {
+              const message = Buffer.from(JSON.stringify({
+                url: localUrl,
+                ip: primaryIP,
+                port: PORT,
+                name: os.hostname() || 'FileShareX-Host'
+              }));
+              udpSocket.send(message, 0, message.length, 41234, '255.255.255.255');
+            } catch (e) {}
+          }, 4000);
+        });
+      } catch (udpErr) {
+        console.warn('Failed to bind UDP Auto-Discovery:', udpErr.message);
+      }
+    } else {
+      console.log('UDP Auto-Discovery skipped (cloud or unavailable).');
     }
   });
 }).catch(err => {

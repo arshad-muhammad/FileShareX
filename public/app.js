@@ -751,7 +751,10 @@ function setupSocket() {
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    reconnectionAttempts: Infinity
+    reconnectionAttempts: Infinity,
+    // Use polling first, then upgrade to websocket for cloud proxy compatibility
+    transports: ['polling', 'websocket'],
+    upgrade: true
   });
 
   socket.on('connect', async () => {
@@ -899,22 +902,43 @@ async function fetchNetworkInfo() {
     const res = await fetch('/api/info');
     const data = await res.json();
     
-    state.ip = data.primaryIP;
-    DOM.networkIpDisplay.innerText = `IP: ${data.primaryIP}`;
-    DOM.currentUserIp.innerText = `IP: ${data.primaryIP}`;
-    
-    // Set QR code inside modal
-    if (data.qr) {
-      DOM.qrCodeImg.src = data.qr;
+    if (data.isCloud) {
+      // Cloud-hosted: show the public URL instead of internal IPs
+      state.ip = data.primaryIP;
+      DOM.networkIpDisplay.innerText = 'Cloud Hosted';
+      DOM.currentUserIp.innerText = `Host: ${data.primaryIP}`;
+      
+      // Set QR code inside modal (generated from public URL)
+      if (data.qr) {
+        DOM.qrCodeImg.src = data.qr;
+      }
+      
+      // Populate connect URL with the public cloud URL
+      DOM.lanUrlsList.innerHTML = '';
+      if (data.url) {
+        const li = document.createElement('li');
+        li.innerHTML = `<a href="${data.url}" target="_blank">${data.url}</a>`;
+        DOM.lanUrlsList.appendChild(li);
+      }
+    } else {
+      // LAN-hosted: show IPs as usual
+      state.ip = data.primaryIP;
+      DOM.networkIpDisplay.innerText = `IP: ${data.primaryIP}`;
+      DOM.currentUserIp.innerText = `IP: ${data.primaryIP}`;
+      
+      // Set QR code inside modal
+      if (data.qr) {
+        DOM.qrCodeImg.src = data.qr;
+      }
+      
+      // Populate connect URLs in modal
+      DOM.lanUrlsList.innerHTML = '';
+      data.ips.forEach(ip => {
+        const li = document.createElement('li');
+        li.innerHTML = `<a href="http://${ip}:${data.port}" target="_blank">http://${ip}:${data.port}</a>`;
+        DOM.lanUrlsList.appendChild(li);
+      });
     }
-    
-    // Populate connect URLs in modal
-    DOM.lanUrlsList.innerHTML = '';
-    data.ips.forEach(ip => {
-      const li = document.createElement('li');
-      li.innerHTML = `<a href="http://${ip}:${data.port}" target="_blank">http://${ip}:${data.port}</a>`;
-      DOM.lanUrlsList.appendChild(li);
-    });
   } catch (err) {
     console.error('Failed to retrieve connection details from endpoint:', err);
     DOM.networkIpDisplay.innerText = 'IP: 127.0.0.1 (Offline)';
