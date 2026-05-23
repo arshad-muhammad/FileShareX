@@ -271,44 +271,6 @@ async function encryptChunk(arrayBuffer, key) {
   return combined;
 }
 
-async function encryptAndHashFile(file, key) {
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-  const encryptedChunks = [];
-  let totalEncryptedSize = 0;
-  
-  for (let i = 0; i < totalChunks; i++) {
-    const startByte = i * CHUNK_SIZE;
-    const endByte = Math.min(startByte + CHUNK_SIZE, file.size);
-    const chunkBlob = file.slice(startByte, endByte);
-    const chunkBuf = await chunkBlob.arrayBuffer();
-    const encChunk = await encryptChunk(chunkBuf, key);
-    encryptedChunks.push(encChunk);
-    totalEncryptedSize += encChunk.byteLength;
-  }
-  
-  const combinedEncrypted = new Uint8Array(totalEncryptedSize);
-  let offset = 0;
-  for (const chunk of encryptedChunks) {
-    combinedEncrypted.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  
-  let sha256Val = '';
-  if (window.crypto && window.crypto.subtle) {
-    try {
-      const hashBuffer = await window.crypto.subtle.digest('SHA-256', combinedEncrypted.buffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      sha256Val = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    } catch (e) {
-      sha256Val = sha256Fallback(combinedEncrypted.buffer);
-    }
-  } else {
-    sha256Val = sha256Fallback(combinedEncrypted.buffer);
-  }
-  
-  return { encryptedChunks, sha256: sha256Val };
-}
-
 async function decryptCombinedFile(encryptedBuffer, key, originalSize, isFallbackFile = false) {
   const encryptedBytes = new Uint8Array(encryptedBuffer);
   const totalChunks = Math.ceil(originalSize / CHUNK_SIZE);
@@ -358,6 +320,120 @@ async function getDecryptedBlobUrl(url, fileType, originalSize, isFallbackFile =
   const decryptedBuffer = await decryptCombinedFile(encryptedArrayBuffer, state.currentChannelKey, originalSize, isFallbackFile);
   const blob = new Blob([decryptedBuffer], { type: fileType });
   return URL.createObjectURL(blob);
+}
+
+class IncrementalSHA256 {
+  constructor() {
+    this.h = [
+      0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+    ];
+    this.k = [
+      0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+      0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+      0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+      0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+      0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+      0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+      0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ];
+    this.buffer = new Uint8Array(64);
+    this.bufferLength = 0;
+    this.totalBytes = 0;
+  }
+
+  update(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    this.totalBytes += bytes.length;
+    let offset = 0;
+
+    while (offset < bytes.length) {
+      const take = Math.min(64 - this.bufferLength, bytes.length - offset);
+      this.buffer.set(bytes.subarray(offset, offset + take), this.bufferLength);
+      this.bufferLength += take;
+      offset += take;
+
+      if (this.bufferLength === 64) {
+        this.processBlock(this.buffer);
+        this.bufferLength = 0;
+      }
+    }
+  }
+
+  processBlock(block) {
+    const w = new Uint32Array(64);
+    const dt = new DataView(block.buffer);
+    for (let j = 0; j < 16; j++) {
+      w[j] = dt.getUint32(j * 4);
+    }
+    for (let j = 16; j < 64; j++) {
+      const s0 = (rightRotate(w[j - 15], 7) ^ rightRotate(w[j - 15], 18) ^ (w[j - 15] >>> 3));
+      const s1 = (rightRotate(w[j - 2], 17) ^ rightRotate(w[j - 2], 19) ^ (w[j - 2] >>> 10));
+      w[j] = (w[j - 16] + s0 + w[j - 7] + s1) | 0;
+    }
+
+    let a = this.h[0], b = this.h[1], c = this.h[2], d = this.h[3], e = this.h[4], f = this.h[5], g = this.h[6], _h = this.h[7];
+
+    for (let j = 0; j < 64; j++) {
+      const S1 = (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25));
+      const ch = ((e & f) ^ (~e & g));
+      const temp1 = (_h + S1 + ch + this.k[j] + w[j]) | 0;
+      const S0 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22));
+      const maj = ((a & b) ^ (a & c) ^ (b & c));
+      const temp2 = (S0 + maj) | 0;
+
+      _h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) | 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) | 0;
+    }
+
+    this.h[0] = (this.h[0] + a) | 0;
+    this.h[1] = (this.h[1] + b) | 0;
+    this.h[2] = (this.h[2] + c) | 0;
+    this.h[3] = (this.h[3] + d) | 0;
+    this.h[4] = (this.h[4] + e) | 0;
+    this.h[5] = (this.h[5] + f) | 0;
+    this.h[6] = (this.h[6] + g) | 0;
+    this.h[7] = (this.h[7] + _h) | 0;
+  }
+
+  finalize() {
+    const bitsLen = this.totalBytes * 8;
+    const padding = [];
+    padding.push(0x80);
+    
+    const currentLen = (this.totalBytes + 1) % 64;
+    const padLen = currentLen <= 56 ? 56 - currentLen : 56 + (64 - currentLen);
+    
+    for (let i = 0; i < padLen; i++) {
+      padding.push(0);
+    }
+    
+    const lenBuffer = new ArrayBuffer(8);
+    const lenView = new DataView(lenBuffer);
+    lenView.setUint32(0, Math.floor(bitsLen / 0x100000000));
+    lenView.setUint32(4, bitsLen | 0);
+    
+    const paddingArray = new Uint8Array(padding.length + 8);
+    paddingArray.set(new Uint8Array(padding), 0);
+    paddingArray.set(new Uint8Array(lenBuffer), padding.length);
+    
+    this.update(paddingArray);
+
+    const hex = [];
+    for (let i = 0; i < 8; i++) {
+      let hexStr = (this.h[i] >>> 0).toString(16);
+      while (hexStr.length < 8) hexStr = '0' + hexStr;
+      hex.push(hexStr);
+    }
+    return hex.join('');
+  }
 }
 
 // ==========================================================================
@@ -466,24 +542,6 @@ function generateUUID() {
     return window.crypto.randomUUID();
   }
   return 'id-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now().toString(36);
-}
-
-// Asynchronously compute file SHA-256 signature
-async function calculateFileSHA256(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  // Attempt native Web Crypto first (standard on localhost / HTTPS)
-  if (window.crypto && window.crypto.subtle) {
-    try {
-      const hashBuffer = await window.crypto.subtle.digest('SHA-256', arrayBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    } catch (e) {
-      console.warn('Native Web Crypto SHA-256 failed, falling back to JS implementation:', e);
-    }
-  }
-  
-  // Insecure context LAN WiFi fallback
-  return sha256Fallback(arrayBuffer);
 }
 
 // Format raw bytes to readable size
@@ -1255,7 +1313,7 @@ async function queueAndUploadFiles(filesList, isDriveFile = false, parentFolderI
       sha256: '',
       uploadedChunks: [],
       totalChunks,
-      status: 'hashing',
+      status: 'uploading',
       controller: null,
       bytesUploaded: 0,
       encryptedChunks: null,
@@ -1267,26 +1325,8 @@ async function queueAndUploadFiles(filesList, isDriveFile = false, parentFolderI
     renderUploadTasks();
     updateUploadBadgeCount();
 
-    // Start Async Hashing and Encryption first
-    try {
-      console.log(`Encrypting and hashing: ${file.name}`);
-      if (state.currentChannelKey) {
-        const { encryptedChunks, sha256 } = await encryptAndHashFile(file, state.currentChannelKey);
-        task.encryptedChunks = encryptedChunks;
-        task.sha256 = sha256;
-      } else {
-        task.sha256 = await calculateFileSHA256(file);
-      }
-      task.status = 'uploading';
-      renderUploadTasks();
-      
-      // Fire upload sequence
-      runChunkedUpload(uploadId);
-    } catch (err) {
-      console.error('Encryption or hashing failed for file:', file.name, err);
-      task.status = 'error';
-      renderUploadTasks();
-    }
+    // Fire upload sequence
+    runChunkedUpload(uploadId);
   }
 }
 
@@ -1301,45 +1341,79 @@ async function runChunkedUpload(uploadId) {
     const statusData = await statusRes.json();
     task.uploadedChunks = statusData.uploadedChunks || [];
     
+    // Ensure hasher is initialized for incremental hashing
+    if (!task.hasher) {
+      task.hasher = new IncrementalSHA256();
+      task.nextHashIndex = 0;
+    }
+
     // Set up AbortController for cancelable fetch requests
     task.controller = new AbortController();
 
     // Loop through slices
     for (let chunkIndex = 0; chunkIndex < task.totalChunks; chunkIndex++) {
-      // Skip if already successfully written
-      if (task.uploadedChunks.includes(chunkIndex)) {
-        continue;
-      }
-
       // Check for manual user interference pauses
       if (task.status === 'paused' || task.status === 'aborted') {
         break;
       }
 
-      // Get chunk byte range
-      let chunkBlob;
-      if (task.encryptedChunks) {
-        chunkBlob = new Blob([task.encryptedChunks[chunkIndex]], { type: 'application/octet-stream' });
-      } else {
+      let processedChunk;
+
+      // If we haven't hashed this chunk yet, process and hash it now
+      if (chunkIndex >= task.nextHashIndex) {
         const startByte = chunkIndex * CHUNK_SIZE;
         const endByte = Math.min(startByte + CHUNK_SIZE, task.fileSize);
-        chunkBlob = task.file.slice(startByte, endByte);
+        const chunkBlob = task.file.slice(startByte, endByte);
+        const chunkBuf = await chunkBlob.arrayBuffer();
+
+        if (state.currentChannelKey) {
+          processedChunk = await encryptChunk(chunkBuf, state.currentChannelKey);
+        } else {
+          processedChunk = new Uint8Array(chunkBuf);
+        }
+
+        task.hasher.update(processedChunk);
+        task.nextHashIndex = chunkIndex + 1;
+      }
+
+      // Skip upload if already successfully written on the server
+      if (task.uploadedChunks.includes(chunkIndex)) {
+        continue;
+      }
+
+      // If we skipped hashing (e.g. on resume), we still need the processed chunk to upload
+      if (!processedChunk) {
+        const startByte = chunkIndex * CHUNK_SIZE;
+        const endByte = Math.min(startByte + CHUNK_SIZE, task.fileSize);
+        const chunkBlob = task.file.slice(startByte, endByte);
+        const chunkBuf = await chunkBlob.arrayBuffer();
+
+        if (state.currentChannelKey) {
+          processedChunk = await encryptChunk(chunkBuf, state.currentChannelKey);
+        } else {
+          processedChunk = new Uint8Array(chunkBuf);
+        }
       }
 
       // Construct Form
+      const chunkBlobToSend = new Blob([processedChunk], { type: 'application/octet-stream' });
       const formData = new FormData();
-      formData.append('chunk', chunkBlob);
+      formData.append('chunk', chunkBlobToSend);
       formData.append('uploadId', uploadId);
       formData.append('chunkIndex', chunkIndex);
       formData.append('totalChunks', task.totalChunks);
       formData.append('fileName', task.fileName);
 
       // Perform Fetch Upload Chunk
-      await fetch('/api/upload/chunk', {
+      const chunkRes = await fetch('/api/upload/chunk', {
         method: 'POST',
         body: formData,
         signal: task.controller.signal
       });
+
+      if (!chunkRes.ok) {
+        throw new Error(`Upload chunk ${chunkIndex} failed with server status: ${chunkRes.status}`);
+      }
 
       // Update state and progress indicators
       task.uploadedChunks.push(chunkIndex);
@@ -1353,6 +1427,9 @@ async function runChunkedUpload(uploadId) {
     if (task.uploadedChunks.length === task.totalChunks && task.status === 'uploading') {
       task.status = 'assembling';
       renderUploadTasks();
+
+      // Finalize the incremental SHA-256 hash
+      task.sha256 = task.hasher.finalize();
 
       let finalFileName = task.fileName;
       if (state.currentChannelKey) {

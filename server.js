@@ -18,8 +18,9 @@ const io = new Server(server, {
   }
 });
 
-const PORT = 3000;
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const PORT = process.env.PORT || 3000;
+const PERSISTENT_DIR = process.env.PERSISTENT_DIR || __dirname;
+const UPLOADS_DIR = path.join(PERSISTENT_DIR, 'uploads');
 const TMP_DIR = path.join(UPLOADS_DIR, 'tmp');
 
 // Create uploads directories if they don't exist
