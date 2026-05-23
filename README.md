@@ -2,23 +2,30 @@
 
 > **Premium, Ultra-Fast Offline Local-Network Chat, Encrypted Sharing & Collaborative Workspace**
 >
-> FileShareX is a futuristic, glassmorphic LAN-communication platform. It allows users connected to the same WiFi/Ethernet network to chat, make voice/video calls, draw together on a whiteboard, explorer a Virtual NAS drive, and securely share large files of any size without requiring an active internet connection.
+> FileShareX is a futuristic, glassmorphic LAN-communication platform. It allows users connected to the same Wi-Fi or Ethernet network to chat, make voice/video calls, draw together on a whiteboard, explore a Virtual NAS drive, and securely share large files of any size without requiring an active internet connection.
 
 ---
 
 ## ✨ Features at a Glance
 
 *   **🔒 Zero-Knowledge End-to-End Encryption (E2EE)**: Dual-Mode in-browser cryptographic pipeline. Utilizes native standard Web Crypto APIs (`PBKDF2` key derivation and 256-bit `AES-GCM`) in secure contexts (HTTPS/localhost). For insecure LAN HTTP contexts (such as external devices connecting via network IP `http://192.168.x.x:3000`), it automatically falls back to a high-performance pure-JS implementation utilizing **SHA-256 key-stretching** and a custom **CTR-SHA256 stream cipher**. All text messages, filenames, and chunked files are fully encrypted locally in the browser before ever leaving the device, ensuring absolute privacy on local subnets.
-*   **📞 WebRTC Voice & Video Calling**: Real-time voice and video conferencing directly inside the active channel. Implemented using native browser media device streams and peer-to-peer connection protocols, with elegant fallback routines for audio-only streams when camera hardware is absent.
-*   **⚡ P2P Direct ArrayBuffer File Transfers**: Transfer files directly from browser-to-browser with zero disk reads/writes on the server. Powered by WebRTC `RTCDataChannel`, with 16KB chunk slicing and active buffer congestion monitoring (1MB threshold) to prevent browser heap overflows.
-*   **📡 Subnet LAN Auto-Discovery**: Offline automatic device discovery utilizing Node.js UDP socket beacons (`dgram` broadcasting on port `41234`) running every 4 seconds. Near active hosts on the local network are pruned after 12 seconds of inactivity and displayed instantly in a list to facilitate multi-device connections.
+*   **⌨️ Pro Keyboard Shortcuts**: Boost efficiency on the app dashboard using standard keyboard commands:
+    *   `Ctrl` / `Cmd` + `U`: Instantly trigger the file upload/attach file selector.
+    *   `Ctrl` / `Cmd` + `J`: Create or join a new room.
+    *   `Ctrl` / `Cmd` + `K`: Focus the search messages input bar.
+    *   `Escape`: Dismiss active modal dialogues, overlays, sidebars, or media previews.
+*   **📱 100% Mobile & Tablet Responsiveness**: The entire application is built with fluid responsiveness:
+    *   **Landing Page**: Built on a modern CSS HSL grid structure featuring asymmetric Bento visualizers (topology nodes, signal lines, pulse lists), flowing seamlessly from large desktop displays to compact smartphone screens.
+    *   **App Dashboard (`/dashboard`)**: Equips mobile and tablet users with slide-out sidebars, floating header capsules, and responsive list filters that hide secondary column data (like size, owner, and date metrics in the Virtual NAS) to keep the layout extremely clean on small touch screens.
+*   **⚡ WebRTC Voice & Video Calling**: Real-time voice and video conferencing directly inside the active channel. Implemented using native browser media device streams and peer-to-peer connection protocols, with elegant fallback routines for audio-only streams when camera hardware is absent.
+*   **🚀 Direct ArrayBuffer File Transfers**: Transfer files directly from browser-to-browser with zero disk reads/writes on the server. Powered by WebRTC `RTCDataChannel`, with 16KB chunk slicing and active buffer congestion monitoring (1MB threshold) to prevent browser heap overflows.
+*   **📡 Subnet LAN Auto-Discovery**: Offline automatic device discovery utilizing Node.js UDP socket beacons (`dgram` broadcasting on port `41234`) running every 4 seconds. Nearby active hosts on the local network are pruned after 12 seconds of inactivity and displayed instantly in a list to facilitate multi-device connections.
 *   **🎨 Real-Time Synced Whiteboard**: Multi-user drawing canvas utilizing normalized float ratios (`x / width`, `y / height`) to guarantee identical, crisp scale rendering across disparate mobile, tablet, and desktop viewports. Features brush size selections, brush colors, and an eraser mode.
 *   **🗄️ Virtual NAS LAN Drive Explorer**: A persistent nested directory explorer built on SQLite database models (with secure atomic JSON-file fallbacks). Files uploaded to the Virtual NAS inherit the E2EE chunking pipeline, meaning they are stored fully encrypted on the server disk!
-*   **📂 Chunked Large File Uploads**: Upload files of any size (from 10 MB to 10 GB+) without memory leaks. Slices files into 1MB sequential chunks with real-time transfer progress, status monitoring, and instant pause/resume triggers.
-*   **🛡️ Cryptographic Integrity Checks**: Client computes SHA-256 hashes sequentially (utilizing native Web Crypto API or highly optimized JS fallbacks for insecure HTTP environments) which are verified by the server before final compilation.
+*   **📂 Chunked Large File Uploads**: Upload files of any size (from 10MB to 10GB+) without memory leaks. Slices files into 1MB sequential chunks with real-time transfer progress, status monitoring, and instant pause/resume triggers.
+*   **🛡️ Cryptographic Integrity Checks**: Client computes SHA-256 hashes sequentially (utilizing native Web Crypto API or high-performance chunked `IncrementalSHA256` fallbacks for insecure HTTP environments) which are verified by the server before final compilation. This incremental hashing prevents browser loop freezes and connection timeouts on large files.
 *   **💾 Robust SQLite & JSON Fallback History**: Fully persistent sqlite3 database stores all chat logs and share details. Fallback mechanism switches gracefully to a robust atomic JSON file structure if native compilation errors occur.
-*   **🚀 Seamless Desktop Collapsible Sidebar**: Collapsible desktop sidebar using custom CSS variables and transition frameworks. Layout configurations (`sidebar-collapsed`) and usernames are stored in local browser state and restored on refresh.
-*   **🎨 Premium Futuristic Glassmorphic Theme**: Dark Obsidian styling (`#04040a`), smooth micro-interactions, responsive mobile drawer, dynamic typing indicator, live user search, message removal, and host-creator room deletion.
+*   **🎨 Premium Futuristic Glassmorphic Theme**: Dark Obsidian styling (`#08080f` base), smooth micro-interactions, responsive mobile drawer, dynamic typing indicator, live user search, message removal, and host-creator room deletion.
 
 ---
 
@@ -33,9 +40,9 @@ graph TD
     Client <==>|WebRTC Peer Connection / RTCDataChannel| Peer[Subnet Peer Client]
 ```
 
-*   **Frontend**: Pure HTML5 (semantic layout), Vanilla CSS (harmonet HSL tokens, spring animations), and modular JavaScript. Zero external JS framework weight!
-*   **Realtime Protocol**: WebSockets via `Socket.IO` for bidirectional user lists, channel listings, text events, typing notifications, whiteboard vector strokes, and WebRTC signalling coordinates.
-*   **Backend Server**: Node.js and Express HTTP routing.
+*   **Frontend**: Pure HTML5 (semantic layout), Vanilla CSS (harmonic HSL tokens, spring animations), and modular JavaScript. Zero external JS framework weight!
+*   **Realtime Protocol**: WebSockets via `Socket.IO` for bidirectional user lists, channel listings, text events, typing notifications, whiteboard vector strokes, and WebRTC signaling coordinates.
+*   **Backend Server**: Node.js and Express HTTP routing. Protected by error-resilient UDP socket wrappers, allowing zero-crash execution on cloud container hosting.
 *   **Networking Broadcast**: Node `dgram` UDP socket broadcaster for LAN subnet discovery beacons.
 *   **File Streaming**: Custom multer `memoryStorage` buffer handlers coupled with direct sequential stream writing (`fs.createWriteStream`) to avoid multi-gigabyte server RAM crashes.
 *   **Database Schema**: SQLite (`database/chat.db`) storing usernames, message body, file type, file size, download URL, channel, virtual drive folders, and timestamp fields.
@@ -172,7 +179,7 @@ graph TD
 ### 1. Connecting Your Network Devices
 1.  On starting the server, you will see a **Network Stats Badge** in the top left corner of the sidebar, indicating your network interface status (e.g., `Local Network Active` with a breathing green pulse).
 2.  Click the network stats card. A sleek glassmorphic **Connect Mobile or Other Devices** modal will fade in.
-3.  Scan the dynamically generated **QR Code** using your smartphone, tablet, or secondary laptop connected to the same LAN WiFi.
+3.  Scan the dynamically generated **QR Code** using your smartphone, tablet, or secondary laptop connected to the same LAN Wi-Fi.
 4.  **Auto-Discovery Connects**: If there are other FileShareX instances running on your LAN subnet, they are discovered automatically and drawn inside the **Subnet Discovery Connect List** at the bottom of the Connect Modal. Simply click the "Connect" button next to any peer host card to open their dashboard!
 
 ### 2. Zero-Knowledge E2EE Setup
