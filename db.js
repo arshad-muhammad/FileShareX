@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const DB_DIR = path.join(__dirname, 'database');
+const PERSISTENT_DIR = process.env.PERSISTENT_DIR || __dirname;
+const DB_DIR = path.join(PERSISTENT_DIR, 'database');
 const SQLITE_PATH = path.join(DB_DIR, 'chat.db');
 const JSON_PATH = path.join(DB_DIR, 'chat.json');
 const DRIVE_JSON_PATH = path.join(DB_DIR, 'drive.json');

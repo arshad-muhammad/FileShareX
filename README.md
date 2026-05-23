@@ -115,11 +115,10 @@ To deploy FileShareX to the cloud, you must use platforms that support **statefu
 
 ##### 1. Render (Recommended / Free & Low-Cost)
 [Render](https://render.com/) supports WebSockets out of the box and lets you mount a persistent volume disk for your database and uploads.
-* **Service Type**: Web Service
-* **Runtime**: Node.js
-* **Build Command**: `npm install`
-* **Start Command**: `node server.js`
-* **Storage Volume**: Mount a persistent volume at `/database` and `/uploads` to keep your SQLite chat history and files persistent.
+We have included a preconfigured [render.yaml](file:///c:/Users/muhda/Documents/gsoc/FileShareX/render.yaml) blueprint configuration at the root of the project to make deployment fully automated:
+* **Blueprint Setup**: In your Render Dashboard, click **New** and choose **Blueprint**.
+* Connect your GitHub repository containing the FileShareX code.
+* Render will automatically parse the `render.yaml` file, set up a stateful Node.js Web Service, attach a **1GB persistent storage volume** mounted at `/var/lib/filesharex/data`, and map the `PERSISTENT_DIR` environment variable to it. This guarantees your SQLite chat history and Virtual NAS uploads remain 100% persistent across server restarts and container upgrades.
 
 ##### 2. Railway
 [Railway](https://railway.app/) is an excellent, developer-friendly platform that runs full Docker/Node containers with persistent disk support.

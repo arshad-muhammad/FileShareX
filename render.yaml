@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: filesharex
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PERSISTENT_DIR
+        value: /var/lib/filesharex/data
+    disk:
+      name: filesharex-storage
+      mountPath: /var/lib/filesharex/data
+      sizeGB: 1
