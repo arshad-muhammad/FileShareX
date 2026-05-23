@@ -42,6 +42,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// Route to serve the app dashboard
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
 // Use memory storage — req.body fields are fully available after multer buffers the request,
 // so we write the chunk to disk manually inside the route handler.
 const upload = multer({ storage: multer.memoryStorage() });
