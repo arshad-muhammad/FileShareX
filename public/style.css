@@ -1746,6 +1746,20 @@ ul { list-style: none; }
 
   .modal-body { max-height: 58dvh; }
   .preview-body { min-height: 10rem; max-height: 58dvh; }
+
+  /* NAS Panel mobile responsive layout adjustments */
+  .nas-list-header {
+    grid-template-columns: 1fr auto !important;
+  }
+  .nas-col-size,
+  .nas-col-owner,
+  .nas-col-date {
+    display: none !important;
+  }
+  .nas-item {
+    grid-template-columns: 1fr auto !important;
+    padding: 10px 12px !important;
+  }
 }
 
 @media (min-width: 769px) {
