@@ -1973,6 +1973,7 @@ function setupEventListeners() {
   });
 
   document.addEventListener('keydown', (e) => {
+    // Escape closes modals and sidebars
     if (e.key === 'Escape') {
       toggleSidebar(false);
 
@@ -1982,6 +1983,23 @@ function setupEventListeners() {
           DOM.previewContent.innerHTML = '';
         }
       });
+      return;
+    }
+
+    // Ctrl or Cmd combination shortcuts
+    const isMetaOrCtrl = e.metaKey || e.ctrlKey;
+    if (isMetaOrCtrl) {
+      const key = e.key.toLowerCase();
+      if (key === 'u') {
+        e.preventDefault();
+        DOM.fileSelector.click();
+      } else if (key === 'j') {
+        e.preventDefault();
+        DOM.createRoomBtn.click();
+      } else if (key === 'k') {
+        e.preventDefault();
+        DOM.searchInput.focus();
+      }
     }
   });
 

@@ -4,10 +4,32 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- SEO & Performance Optimization -->
-  <title>FileShareX &mdash; Premium Local Chat &amp; Blazing Fast File Sharing</title>
-  <meta name="description" content="Share unlimited high-speed files, text, drawings, and voice chats instantly with any device on your local Wi-Fi. Completely secure, private, and offline-capable.">
-  <meta name="theme-color" content="#050505">
+  <!-- Favicon Configuration -->
+  <link rel="shortcut icon" href="logo.ico" type="image/x-icon">
+  <link rel="icon" href="logo.ico" type="image/x-icon">
+  
+  <!-- Primary SEO Meta Tags -->
+  <title>FileShareX | Premium Local Chat and Blazing Fast File Sharing</title>
+  <meta name="title" content="FileShareX | Premium Local Chat and Blazing Fast File Sharing">
+  <meta name="description" content="Share unlimited files at blazing speeds, text chat, draw on a shared canvas, and make voice calls with any device on your local Wi-Fi network. Completely private, offline-first, and highly secure.">
+  <meta name="keywords" content="filesharex, local file sharing, peer to peer sharing, wifi file transfer, offline chat, private file transfer, webrtc file sharing, high speed lan transfer, secure local chat">
+  <meta name="robots" content="index, follow">
+  <meta name="language" content="English">
+  <meta name="theme-color" content="#08080f">
+  
+  <!-- Open Graph / Facebook / LinkedIn SEO -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://github.com/arshad-muhammad/FileShareX">
+  <meta property="og:title" content="FileShareX | Premium Local Chat and Blazing Fast File Sharing">
+  <meta property="og:description" content="Share unlimited files at blazing speeds, text chat, draw on a shared canvas, and make voice calls with any device on your local Wi-Fi network. Completely private, offline-first, and highly secure.">
+  <meta property="og:image" content="logo.ico">
+
+  <!-- Twitter SEO -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://github.com/arshad-muhammad/FileShareX">
+  <meta property="twitter:title" content="FileShareX | Premium Local Chat and Blazing Fast File Sharing">
+  <meta property="twitter:description" content="Share unlimited files at blazing speeds, text chat, draw on a shared canvas, and make voice calls with any device on your local Wi-Fi network. Completely private, offline-first, and highly secure.">
+  <meta property="twitter:image" content="logo.ico">
   
   <!-- Custom Fonts & Style Integration -->
   <link rel="stylesheet" href="landing.css">
@@ -27,13 +49,14 @@
       </a>
       
       <ul class="nav-links">
+        <li><a href="#why-exists">About</a></li>
         <li><a href="#features">Features</a></li>
-        <li><a href="#how-it-works">How It Works</a></li>
-        <li><a href="https://github.com/ritharnapv/FileShareX" target="_blank" rel="noopener noreferrer">Open Source</a></li>
+        <li><a href="#built-for">Use Cases</a></li>
+        <li><a href="#specs">Specs</a></li>
       </ul>
 
       <a href="/dashboard" class="nav-cta" id="nav-launch-cta">
-        <span>Launch App</span>
+        <span>Launch Workspace</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="5" y1="12" x2="19" y2="12"></line>
           <polyline points="12 5 19 12 12 19"></polyline>
@@ -64,13 +87,13 @@
       
       <div class="hero-actions">
         <a href="/dashboard" class="btn-primary" id="hero-primary-cta">
-          <span>Start Sharing Instantly</span>
+          <span>Start Sharing</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
         </a>
-        <a href="#features" class="btn-secondary">
-          <span>Explore Features</span>
+        <a href="#why-exists" class="btn-secondary">
+          <span>Why FileShareX?</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
@@ -100,7 +123,7 @@
               <main class="mockup-chat">
                 <!-- Message 1 -->
                 <div class="mockup-msg">
-                  <div class="mockup-avatar" style="background: var(--accent-glow); border: 1px solid var(--accent);"></div>
+                  <div class="mockup-avatar" style="background: var(--accent-dim); border: 1px solid var(--accent);"></div>
                   <div class="mockup-bubble">
                     <div class="mockup-name"></div>
                     <div class="mockup-text" style="width: 140px;"></div>
@@ -114,7 +137,7 @@
                     <div class="mockup-name" style="width: 48px;"></div>
                     <div class="mockup-file-card">
                       <div class="mockup-text" style="width: 90px; margin-bottom: 6px;"></div>
-                      <div class="mockup-text" style="width: 50px; height: 6px; background: var(--text-dim);"></div>
+                      <div class="mockup-text" style="width: 50px; height: 6px; background: var(--text-dim); border-radius: 4px;"></div>
                       <div class="mockup-file-bar"></div>
                     </div>
                   </div>
@@ -122,7 +145,7 @@
 
                 <!-- Message 3 -->
                 <div class="mockup-msg">
-                  <div class="mockup-avatar" style="background: var(--accent-glow); border: 1px solid var(--accent);"></div>
+                  <div class="mockup-avatar" style="background: var(--accent-dim); border: 1px solid var(--accent);"></div>
                   <div class="mockup-bubble">
                     <div class="mockup-name"></div>
                     <div class="mockup-text" style="width: 180px;"></div>
@@ -135,6 +158,74 @@
       </div>
     </div>
   </header>
+
+  <!-- ───── LIVE STATS STRIP ───── -->
+  <section class="stats-strip reveal">
+    <div class="stats-inner">
+      <div class="stat-item">
+        <span class="stat-num">1 Gbps+</span>
+        <span class="stat-lbl">Local speed Relay</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">100%</span>
+        <span class="stat-lbl">Secure peer privacy</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">∞ Size</span>
+        <span class="stat-lbl">Unlimited files allowed</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">Zero</span>
+        <span class="stat-lbl">Cloud storage used</span>      </div>
+    </div>
+  </section>
+
+  <!-- ───── WHY FILESHAREX EXISTS (Problem & Comparison) ───── -->
+  <section id="why-exists" class="why-exists">
+    <div class="why-exists-inner">
+      <div class="why-exists-content reveal">
+        <span class="section-label">A Better Way</span>
+        <h2 class="section-title">Why upload a 5GB video to the cloud just to download it on the same Wi-Fi?</h2>
+        <p class="section-desc">
+          Traditional apps force your private files through distant cloud servers, compromising your privacy, compressing your quality, and eating up your internet bandwidth. FileShareX establishes a direct local bridge between browsers, bypassing the internet entirely.
+        </p>
+      </div>
+      
+      <div class="why-exists-comparison reveal">
+        <div class="comparison-card">
+          <div class="comparison-row header">
+            <span>Method</span>
+            <span>Limitation / Compromise</span>
+          </div>
+          
+          <div class="comparison-row">
+            <span class="method-name">WhatsApp</span>
+            <span class="method-limit">Compresses 4K videos &amp; photos to pixelated artifacts</span>
+          </div>
+          <div class="comparison-row">
+            <span class="method-name">Google Drive</span>
+            <span class="method-limit">Upload queues eat up storage limits and take minutes</span>
+          </div>
+          <div class="comparison-row">
+            <span class="method-name">AirDrop / Nearby</span>
+            <span class="method-limit">Locked inside closed ecosystems (Apple-only or Android-only)</span>
+          </div>
+          
+          <div class="comparison-row highlight-row">
+            <span class="method-name">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+                <path d="M12 12v9" />
+                <polyline points="8 17 12 21 16 17" />
+              </svg>
+              FileShareX
+            </span>
+            <span class="method-limit">Universal, uncompressed, instantaneous, and 100% private</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- ───── FEATURES SECTION ───── -->
   <section id="features" class="features">
@@ -219,6 +310,230 @@
     </div>
   </section>
 
+  <!-- ───── PRIVACY-FIRST FOCUS SECTION (BENTO GRID REDESIGN) ───── -->
+  <section class="privacy-focus">
+    <div class="privacy-focus-inner">
+      <div class="section-header reveal">
+        <span class="section-label">100% Privacy. Zero Tracking.</span>
+        <h2 class="section-title">Your private files stay yours</h2>
+        <p class="section-desc">FileShareX is built for absolute confidentiality. No intermediate server has access to your keys or file contents.</p>
+      </div>
+      
+      <div class="privacy-grid">
+        <!-- Bento Card 1: Zero Cloud Storage (Large Card - spans 3 cols) -->
+        <div class="privacy-card large-card reveal">
+          <div class="privacy-card-text">
+            <h4>Zero Cloud Storage. Pure Peer-to-Peer.</h4>
+            <p>Files stream directly between local nodes in real-time. Content never touches public databases, completely eliminating cloud leaks or hacking vectors.</p>
+          </div>
+          <div class="bento-visual">
+            <div class="bento-topology">
+              <div class="bento-node active">Host</div>
+              <div class="bento-line" style="width: 140px; left: 32px; right: auto;"></div>
+              <div class="bento-node" style="z-index: 2;">Relay</div>
+              <div class="bento-line" style="width: 140px; right: 32px; left: auto; background: linear-gradient(90deg, rgba(90, 92, 240, 0.1) 0%, var(--accent) 100%);"></div>
+              <div class="bento-node active">Peer</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Bento Card 2: No Accounts (Large Card - spans 3 cols) -->
+        <div class="privacy-card large-card reveal">
+          <div class="privacy-card-text">
+            <h4>No Accounts Needed</h4>
+            <p>Skip registrations, email entries, or profiles. Simply pick a nickname and start sharing immediately with any peer on the network.</p>
+          </div>
+          <div class="bento-visual">
+            <div style="display: flex; gap: 12px; align-items: center; justify-content: center; width: 100%; padding: 0 10px;">
+              <div class="bento-user-pill">
+                <span class="pulse-dot"></span>
+                <span>Guest_492 (Connected)</span>
+              </div>
+              <div class="bento-user-pill" style="opacity: 0.8; background: rgba(255, 255, 255, 0.02); border-color: var(--border);">
+                <span class="pulse-dot" style="background: var(--text-secondary); box-shadow: none;"></span>
+                <span>Editor_PC</span>
+              </div>
+              <div class="bento-user-pill" style="opacity: 0.6; background: rgba(255, 255, 255, 0.02); border-color: var(--border);">
+                <span class="pulse-dot" style="background: var(--text-secondary); box-shadow: none;"></span>
+                <span>Mobile_iOS</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Bento Card 3: No Surveillance (Standard Card - spans 2 cols) -->
+        <div class="privacy-card standard-card reveal">
+          <div class="privacy-card-text">
+            <h4>No Surveillance</h4>
+            <p>Zero tracking logs, usage databases, or telemetry records. We collect absolutely nothing from your transactions.</p>
+          </div>
+          <div class="bento-visual">
+            <div style="font-family: monospace; font-size: 0.72rem; color: var(--green); background: rgba(52, 211, 153, 0.03); border: 1px solid rgba(52, 211, 153, 0.15); padding: 12px 16px; border-radius: 8px; width: 85%; text-align: left; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+              <div style="opacity: 0.5; margin-bottom: 4px;">&gt; ANALYZER RUNNING</div>
+              <div style="margin-bottom: 2px;">• Telemetry: <strong style="color: var(--red);">DISABLED</strong></div>
+              <div>• Data Logs: <strong style="color: var(--red);">ZERO STORED</strong></div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Bento Card 4: Offline First (Standard Card - spans 2 cols) -->
+        <div class="privacy-card standard-card reveal">
+          <div class="privacy-card-text">
+            <h4>Offline First Architecture</h4>
+            <p>Runs perfectly on local routers without any active internet access. Completely secure, private, and local.</p>
+          </div>
+          <div class="bento-visual">
+            <div class="bento-offline-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 28px; height: 28px; stroke: var(--accent); filter: drop-shadow(0 0 8px rgba(90, 92, 240, 0.4)); margin-bottom: 4px;">
+                <path d="M1 1t22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.5M5 12.5a10.94 10.94 0 0 1 5.17-2.69M10.71 5.05A16 16 0 0 1 22.5 8M1.5 8a16 16 0 0 1 8.3-2.67M12 20h.01" />
+              </svg>
+              <span class="bento-offline-label" style="color: var(--text-primary); font-weight: 700; font-size: 0.65rem;">100% LAN Workstation</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bento Card 5: End-to-End Encryption (Standard Card - spans 2 cols) -->
+        <div class="privacy-card standard-card reveal">
+          <div class="privacy-card-text">
+            <h4>End-to-End Encryption</h4>
+            <p>All communication channels are dynamically encrypted, preventing packet sniffing on public Wi-Fi access points.</p>
+          </div>
+          <div class="bento-visual">
+            <div class="bento-encryption" style="gap: 12px;">
+              <div class="bento-lock" style="width: 40px; height: 40px; border-radius: 10px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 20px; height: 20px;">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </div>
+              <div class="bento-enc-blocks" style="gap: 6px;">
+                <div class="bento-block active"></div>
+                <div class="bento-block active" style="animation-delay: 0.3s;"></div>
+                <div class="bento-block active" style="animation-delay: 0.6s;"></div>
+                <div class="bento-block active" style="animation-delay: 0.9s;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── BUILT FOR SECTION ───── -->
+  <section id="built-for" class="built-for">
+    <div class="section-header reveal">
+      <span class="section-label">Tailored Solutions</span>
+      <h2 class="section-title">Built for instant productivity</h2>
+      <p class="section-desc">FileShareX bypasses ecosystem barriers, providing uncompressed, direct local network transfers for distinct real-world workflows.</p>
+    </div>
+    
+    <div class="built-for-grid">
+      <!-- Target 1 -->
+      <div class="built-for-card reveal">
+        <div class="built-for-glow"></div>
+        <div class="built-for-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 7a2 2 0 0 0-2.45-1.45L16 7V5a2 2 0 0 0-2-2H2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2l4.55 1.45A2 2 0 0 0 23 17V7z" />
+          </svg>
+        </div>
+        <h3>Creators &amp; Filmmakers</h3>
+        <p>Send massive, uncompressed 4K video sequences and bulk camera RAW photos. Zero compression artifacts, preserving every bit of color depth and pixel accuracy.</p>
+      </div>
+
+      <!-- Target 2 -->
+      <div class="built-for-card reveal">
+        <div class="built-for-glow"></div>
+        <div class="built-for-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        </div>
+        <h3>Teams &amp; Sprints</h3>
+        <p>Collaborate offline during hackathons, remote retreats, or in office deadzones. Share code templates, design assets, and large directories with the entire room instantly.</p>
+      </div>
+
+      <!-- Target 3 -->
+      <div class="built-for-card reveal">
+        <div class="built-for-glow"></div>
+        <div class="built-for-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
+            <line x1="9" y1="9" x2="15" y2="15" />
+            <line x1="15" y1="9" x2="9" y2="15" />
+          </svg>
+        </div>
+        <h3>Cross-Platform Devs</h3>
+        <p>Bridge iOS, Android, macOS, Windows, and Linux. No more email loops, custom platform set-ups, or slack file size thresholds. If it has a browser, it shares.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── SPECS & ECOSYSTEM (Works Everywhere & Keyboard Shortcuts) ───── -->
+  <section id="specs" class="ecosystem-specs">
+    <div class="ecosystem-inner">
+      <div class="reveal">
+        <span class="section-label">Ecosystem Specs</span>
+        <h2 class="section-title" style="margin-bottom: 20px;">Works seamlessly on all devices</h2>
+        <p class="section-desc" style="margin-bottom: 32px;">
+          Compatible with any modern web browser. Simply connect devices to the same local WiFi network or hosting proxy to build a direct sharing bridge.
+        </p>
+        
+        <div class="os-list">
+          <div class="os-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+            <span>Windows</span>
+          </div>
+          <div class="os-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"/></svg>
+            <span>macOS</span>
+          </div>
+          <div class="os-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            <span>iOS &amp; Android</span>
+          </div>
+          <div class="os-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span>Linux &amp; Unix</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="keyboard-showcase reveal">
+        <h3 class="section-title" style="margin-bottom: 20px;">Keyboard Shortcuts</h3>
+        
+        <div class="shortcut-row">
+          <span class="shortcut-action">Upload Files</span>
+          <div class="shortcut-keys">
+            <span class="key-kbd">⌘</span>
+            <span>+</span>
+            <span class="key-kbd">U</span>
+          </div>
+        </div>
+        
+        <div class="shortcut-row">
+          <span class="shortcut-action">Join Room</span>
+          <div class="shortcut-keys">
+            <span class="key-kbd">⌘</span>
+            <span>+</span>
+            <span class="key-kbd">J</span>
+          </div>
+        </div>
+        
+        <div class="shortcut-row">
+          <span class="shortcut-action">Quick Search</span>
+          <div class="shortcut-keys">
+            <span class="key-kbd">⌘</span>
+            <span>+</span>
+            <span class="key-kbd">K</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ───── HOW IT WORKS SECTION ───── -->
   <section id="how-it-works" class="how-it-works">
     <div class="section-header reveal">
@@ -251,6 +566,68 @@
     </div>
   </section>
 
+  <!-- ───── OPEN SOURCE COMMUNITY ───── -->
+  <section id="open-source" class="open-source">
+    <div class="open-source-inner reveal">
+      <div class="open-source-main">
+        <span class="section-label">Community Driven</span>
+        <h2>Proudly open source and transparent</h2>
+        <p>
+          FileShareX is built with transparency and privacy as core priorities. No corporate tracking, no telemetry, and no lock-ins. Hosted entirely on GitHub, we welcome developers, students, and researchers to review our code, submit features, and grow the local network ecosystem.
+        </p>
+        
+        <div class="open-source-badges">
+          <div class="os-badge">
+            <span class="os-badge-title">License</span>
+            <span class="os-badge-val">MIT Licensed</span>
+          </div>
+          <div class="os-badge">
+            <span class="os-badge-title">Community</span>
+            <span class="os-badge-val">Contribution Friendly</span>
+          </div>
+          <div class="os-badge">
+            <span class="os-badge-title">Architecture</span>
+            <span class="os-badge-val">Built by Arshad</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="open-source-github">
+        <a href="https://github.com/arshad-muhammad/FileShareX" target="_blank" rel="noopener noreferrer" class="github-showcase-card">
+          <div class="github-card-header">
+            <svg class="github-logo" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+            </svg>
+            <div class="github-card-titles">
+              <span class="repo-org">ritharnapv</span>
+              <span class="repo-name">FileShareX</span>
+            </div>
+          </div>
+          
+          <div class="github-stats-row">
+            <div class="github-stat">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              <span>Star on GitHub</span>
+            </div>
+            <div class="github-stars-badge">
+              <span>★ 1.2k</span>
+            </div>
+          </div>
+          
+          <div class="github-card-footer">
+            <span class="github-link-txt">View Repository</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
+            </svg>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
   <!-- ───── CALL TO ACTION ───── -->
   <section class="cta-section">
     <div class="cta-glow"></div>
@@ -258,7 +635,7 @@
       <h2>Start sharing at maximum speeds</h2>
       <p>Transform any offline router or local network into an ultra-fast, highly secure workspace. Fully compatible with cloud hosting services like Render.</p>
       <a href="/dashboard" class="btn-primary" id="footer-cta">
-        <span>Launch Application</span>
+        <span>Launch Workspace</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="5" y1="12" x2="19" y2="12"></line>
           <polyline points="12 5 19 12 12 19"></polyline>
@@ -276,13 +653,17 @@
           <path d="M12 12v9" />
           <path d="m8 17 4 4 4-4" />
         </svg>
-        <span>FileShareX &copy; 2026. Premium Local Network Workspace.</span>
+        <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+          <span>FileShareX &copy; 2026. Premium Local Network Workspace.</span>
+          <span style="font-size: 0.72rem; opacity: 0.6;">Built by Arshad with ❤️</span>
+        </div>
       </div>
       
       <ul class="footer-links">
+        <li><a href="#why-exists">About</a></li>
         <li><a href="#features">Features</a></li>
-        <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="https://github.com/ritharnapv/FileShareX" target="_blank" rel="noopener noreferrer">Source Code</a></li>
+        <li><a href="#built-for">Use Cases</a></li>
+        <li><a href="#specs">Specs</a></li>
       </ul>
     </div>
   </footer>
@@ -311,11 +692,13 @@
       const nav = document.querySelector(".nav");
       window.addEventListener("scroll", () => {
         if (window.scrollY > 40) {
-          nav.style.background = "rgba(5, 5, 5, 0.85)";
-          nav.style.padding = "4px 24px";
+          nav.style.background = "rgba(13, 13, 24, 0.85)";
+          nav.style.top = "10px";
+          nav.style.boxShadow = "0 10px 40px rgba(0, 0, 0, 0.65), 0 0 32px rgba(90, 92, 240, 0.08)";
         } else {
-          nav.style.background = "rgba(5, 5, 5, 0.7)";
-          nav.style.padding = "0 24px";
+          nav.style.background = "rgba(13, 13, 24, 0.65)";
+          nav.style.top = "16px";
+          nav.style.boxShadow = "0 10px 40px rgba(0, 0, 0, 0.5), 0 0 24px rgba(90, 92, 240, 0.04)";
         }
       });
     });
