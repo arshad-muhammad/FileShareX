@@ -952,7 +952,10 @@ function setupSocket() {
         notifBody = `📎 File: ${displayedFileName}`;
       }
 
-      if (document.hidden) {
+      if (!document.hasFocus()) {
+        // ALWAYS play the audio chime in the background so they hear it!
+        playNotificationChime();
+
         if ('Notification' in window && Notification.permission === 'granted') {
           try {
             const n = new Notification(`FileShareX : ${msg.username}`, {
