@@ -775,6 +775,44 @@ io.on('connection', (socket) => {
     });
   });
 
+  // --- Room P2P File Sharing Relays ---
+  socket.on('send-p2p-file', async ({ fileId, fileName, fileSize, fileType }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+
+    const dbMessage = {
+      username: user.username,
+      message: `Shared a P2P file: ${fileName}`,
+      type: 'p2p-file',
+      fileUrl: `p2p:${fileId}:${socket.id}`,
+      fileName,
+      fileSize: parseInt(fileSize, 10),
+      fileType,
+      timestamp: Date.now(),
+      channel: user.currentChannel
+    };
+
+    try {
+      const savedMsg = await db.saveMessage(dbMessage);
+      io.to(user.currentChannel).emit('message', savedMsg);
+    } catch (err) {
+      console.error('Error saving P2P file message:', err);
+    }
+  });
+
+  socket.on('p2p-room-request', ({ target, fileId, fileName, fileSize, fileType }) => {
+    const sender = onlineUsers.get(socket.id);
+    if (!sender) return;
+    io.to(target).emit('p2p-room-request', {
+      senderId: socket.id,
+      senderName: sender.username,
+      fileId,
+      fileName,
+      fileSize,
+      fileType
+    });
+  });
+
   // --- Whiteboard Drawing and Clearing Relays ---
   socket.on('draw-line', (data) => {
     const user = onlineUsers.get(socket.id);
