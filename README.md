@@ -152,30 +152,36 @@ The typical journey of a user interacting with the FileShareX local network work
 ```mermaid
 graph TD
     A[User connects via WiFi/Ethernet] --> B[Enter Username & Choose Avatar Color]
-    B --> C[Persisted in LocalStorage - skip name prompt on refresh]
-    C --> D{Workspace Interface}
+    B -->|Dynamic Prompt| C[Request Browser Notification Permission]
+    C --> D[Name persisted in LocalStorage]
+    D --> E{Workspace Interface}
     
-    D --> E[Join Protected Rooms]
-    E -->|Requires Password| F[Enter room password -> derive E2EE decrypt key]
-    E -->|Valid Password / Open| G[Access channel stream & retrieve SQLite history]
+    E --> F[Join Protected Rooms]
+    F -->|Requires Password| G[Enter room password -> derive E2EE decrypt key]
+    F -->|Valid Password / Open| H[Access channel stream & retrieve SQLite history]
     
-    D --> H[Create Custom Room]
-    H -->|Optionally set password| I[Created and registered under server memory]
+    E --> I[Create Custom Room]
+    I -->|Optionally set password| J[Created and registered in server memory]
     
-    D --> J[Share High-Quality Files]
-    J -->|Drag & Drop / Attach| K[Encrypt slices + calculate SHA-256 client-side]
-    K --> L[Manager shows upload status / pause / resume triggers]
-    L --> M[Merging completes -> File broadcasts encrypted to active members]
+    E --> K[Share P2P Chat Files]
+    K -->|Drag & Drop / Attach| L[Stored locally in browser memory + broadcast metadata]
+    L --> M[Receivers map sender online status]
+    M -->|Download clicked| N[WebRTC Data Channel established browser-to-browser]
+    N --> O[Stream sliced chunks directly at 1 Gbps+ speeds -> Trigger Download]
     
-    D --> N[Collaborative Canvas]
-    N -->|Draw on Whiteboard| O[Coordinates normalized -> synchronized in real-time]
+    E --> P[Virtual NAS Drive]
+    P -->|Upload File| Q[Chunked & saved strictly to local server persistent drive uploads/]
     
-    D --> P[Virtual NAS Drive]
-    P -->|Create Folders / Upload| Q[Securely store nested files in server persistent drive]
+    E --> R[Real-time Notifications]
+    R -->|Tab out of focus / minimized| S[Play synthesized double audio chime + trigger native OS push alert]
+    R -->|Tab active / maximized| T[Play synthesized double audio chime + slide in glassmorphic toast]
     
-    D --> R[Remote Screen Assistance]
-    R -->|Click Online User| S[Send screen control request via Socket.IO]
-    S -->|Accepted| T[WebRTC peer connection established - full screen stream + interactive control]
+    E --> U[Collaborative Canvas]
+    U -->|Draw on Whiteboard| V[Coordinates normalized -> synchronized in real-time]
+    
+    E --> W[Remote Screen Assistance]
+    W -->|Click Online User| X[Send screen control request via Socket.IO]
+    X -->|Accepted| Y[WebRTC peer connection established - full screen stream + interactive control]
 ```
 
 ---
