@@ -31,7 +31,14 @@ const state = {
   // WebRTC Call State
   isCallActive: false,
   isAudioMuted: false,
-  isVideoMuted: false
+  isVideoMuted: false,
+  
+  // Remote Screening state
+  screenShareActive: false,
+  screenSharePartner: null, // socketId
+  screenShareType: null, // 'viewer' or 'host'
+  screenShareStream: null,
+  screenSharePC: null
 };
 
 // ==========================================================================
@@ -690,8 +697,114 @@ const DOM = {
   nasNewFolderBtn: document.getElementById('nas-new-folder-btn'),
   nasUploadBtn: document.getElementById('nas-upload-btn'),
   nasFileInput: document.getElementById('nas-file-input'),
-  nasFilesList: document.getElementById('nas-files-list')
+  nasFilesList: document.getElementById('nas-files-list'),
+  
+  // Remote Screening & Assistance selectors
+  screenAssistReqModal: document.getElementById('screen-assist-request-modal'),
+  screenAssistReqTargetName: document.getElementById('screen-assist-request-target-name'),
+  screenAssistCancelBtn: document.getElementById('screen-assist-cancel-btn'),
+  
+  screenAssistIncModal: document.getElementById('screen-assist-incoming-modal'),
+  screenAssistIncSenderName: document.getElementById('screen-assist-incoming-sender-name'),
+  screenAssistAcceptBtn: document.getElementById('screen-assist-accept-btn'),
+  screenAssistDeclineBtn: document.getElementById('screen-assist-decline-btn'),
+  
+  screenAssistViewport: document.getElementById('screen-assist-viewport'),
+  screenAssistPartnerName: document.getElementById('screen-assist-partner-name'),
+  screenAssistExitBtn: document.getElementById('screen-assist-exit-btn'),
+  screenAssistVideo: document.getElementById('screen-assist-video'),
+  screenAssistStreamContainer: document.getElementById('screen-assist-stream-container'),
+  
+  screenAssistHostBar: document.getElementById('screen-assist-host-bar'),
+  screenAssistHostPartner: document.getElementById('screen-assist-host-partner'),
+  screenAssistStopShareBtn: document.getElementById('screen-assist-stop-share-btn'),
+  
+  remoteCursor: document.getElementById('remote-cursor'),
+  remoteCursorLabel: document.getElementById('remote-cursor-label'),
+  clickRippleContainer: document.getElementById('click-ripple-container'),
+  screenAssistHiddenInput: document.getElementById('screen-assist-hidden-input'),
+  screenAssistKbdBtn: document.getElementById('screen-assist-kbd-btn'),
+  
+  // Custom dialog elements
+  customDialogModal: document.getElementById('custom-dialog-modal'),
+  customDialogIcon: document.getElementById('custom-dialog-icon'),
+  customDialogTitle: document.getElementById('custom-dialog-title'),
+  customDialogMessage: document.getElementById('custom-dialog-message'),
+  customDialogInputContainer: document.getElementById('custom-dialog-input-container'),
+  customDialogInput: document.getElementById('custom-dialog-input'),
+  customDialogButtons: document.getElementById('custom-dialog-buttons')
 };
+
+// ==========================================================================
+// Custom Glassmorphic Dialog Helpers (replaces native alert/confirm)
+// ==========================================================================
+function showCustomAlert(title, message, type = 'info') {
+  return new Promise(resolve => {
+    const iconColors = {
+      info:    { bg: 'rgba(90, 92, 240, 0.12)', fg: '#5a5cf0' },
+      success: { bg: 'rgba(16, 185, 129, 0.12)', fg: '#10b981' },
+      warning: { bg: 'rgba(245, 158, 11, 0.12)', fg: '#f59e0b' },
+      danger:  { bg: 'rgba(239, 68, 68, 0.12)',  fg: '#ef4444' }
+    };
+    const icons = {
+      info:    '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>',
+      success: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>',
+      warning: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>',
+      danger:  '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>'
+    };
+    const c = iconColors[type] || iconColors.info;
+    DOM.customDialogIcon.style.background = c.bg;
+    DOM.customDialogIcon.style.color = c.fg;
+    DOM.customDialogIcon.querySelector('svg').innerHTML = icons[type] || icons.info;
+    DOM.customDialogTitle.textContent = title;
+    DOM.customDialogMessage.textContent = message;
+    DOM.customDialogInputContainer.classList.add('hidden');
+    DOM.customDialogButtons.innerHTML = `<button class="btn btn-primary" style="flex:1;border-radius:var(--r-md);">OK</button>`;
+    DOM.customDialogButtons.querySelector('button').addEventListener('click', () => {
+      DOM.customDialogModal.classList.remove('active');
+      resolve();
+    });
+    DOM.customDialogModal.classList.add('active');
+  });
+}
+
+function showCustomConfirm(title, message, type = 'info') {
+  return new Promise(resolve => {
+    const iconColors = {
+      info:    { bg: 'rgba(90, 92, 240, 0.12)', fg: '#5a5cf0' },
+      success: { bg: 'rgba(16, 185, 129, 0.12)', fg: '#10b981' },
+      warning: { bg: 'rgba(245, 158, 11, 0.12)', fg: '#f59e0b' },
+      danger:  { bg: 'rgba(239, 68, 68, 0.12)',  fg: '#ef4444' }
+    };
+    const icons = {
+      info:    '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>',
+      success: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>',
+      warning: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>',
+      danger:  '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>'
+    };
+    const c = iconColors[type] || iconColors.info;
+    DOM.customDialogIcon.style.background = c.bg;
+    DOM.customDialogIcon.style.color = c.fg;
+    DOM.customDialogIcon.querySelector('svg').innerHTML = icons[type] || icons.info;
+    DOM.customDialogTitle.textContent = title;
+    DOM.customDialogMessage.textContent = message;
+    DOM.customDialogInputContainer.classList.add('hidden');
+    const btnColor = type === 'danger' ? 'background:linear-gradient(135deg,#ef4444,#dc2626);' : '';
+    DOM.customDialogButtons.innerHTML = `
+      <button class="btn" style="flex:1;border-radius:var(--r-md);background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border);" data-action="cancel">Cancel</button>
+      <button class="btn btn-primary" style="flex:1;border-radius:var(--r-md);${btnColor}" data-action="confirm">Confirm</button>
+    `;
+    DOM.customDialogButtons.querySelector('[data-action="cancel"]').addEventListener('click', () => {
+      DOM.customDialogModal.classList.remove('active');
+      resolve(false);
+    });
+    DOM.customDialogButtons.querySelector('[data-action="confirm"]').addEventListener('click', () => {
+      DOM.customDialogModal.classList.remove('active');
+      resolve(true);
+    });
+    DOM.customDialogModal.classList.add('active');
+  });
+}
 
 // Track all known rooms (updated from server)
 let knownRooms = [];
@@ -894,6 +1007,35 @@ function setupSocket() {
       loadNasDirectory();
     }
   });
+
+  // --- Remote Screening & Interactive Assistance Sockets ---
+  socket.on('screen-assist-request', ({ senderId, senderName }) => {
+    handleIncomingScreenRequest(senderId, senderName);
+  });
+
+  socket.on('screen-assist-respond', ({ responderId, accepted }) => {
+    handleScreenRequestResponse(responderId, accepted);
+  });
+
+  socket.on('webrtc-screen-signal', async ({ sender, signal }) => {
+    await handleScreenSignal(sender, signal);
+  });
+
+  socket.on('screen-assist-mouse-move', ({ senderId, x, y }) => {
+    handleRemoteMouseMove(senderId, x, y);
+  });
+
+  socket.on('screen-assist-click', ({ senderId, x, y }) => {
+    handleRemoteClick(senderId, x, y);
+  });
+
+  socket.on('screen-assist-keypress', ({ senderId, key, code, ctrlKey, metaKey, shiftKey }) => {
+    handleRemoteKeypress(senderId, key, code, ctrlKey, metaKey, shiftKey);
+  });
+
+  socket.on('screen-assist-stop', ({ senderId }) => {
+    stopScreenShareSession(false);
+  });
 }
 
 // Fetch network details from API (primary LAN IP and QR code link)
@@ -1044,8 +1186,8 @@ async function appendMessage(msg) {
   // Wire up delete button
   const deleteBtn = msgGroup.querySelector('.msg-delete-btn');
   if (deleteBtn) {
-    deleteBtn.addEventListener('click', () => {
-      if (!confirm('Delete this message for everyone?')) return;
+    deleteBtn.addEventListener('click', async () => {
+      if (!(await showCustomConfirm('Delete Message', 'Are you sure you want to delete this message for everyone?', 'danger'))) return;
       socket.emit('delete-message', { msgId: msg.id });
     });
   }
@@ -1158,9 +1300,9 @@ function renderRoomList() {
     // Delete room button
     const delBtn = li.querySelector('.room-delete-btn');
     if (delBtn) {
-      delBtn.addEventListener('click', (e) => {
+      delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirm(`Delete room "${room.displayName}"? All members will be moved to #general.`)) return;
+        if (!(await showCustomConfirm('Delete Room', `Are you sure you want to delete room "${room.displayName}"? All members will be moved to #general.`, 'danger'))) return;
         socket.emit('delete-room', { roomId: room.id });
       });
     }
@@ -1269,6 +1411,13 @@ function renderOnlineUsers() {
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
           </button>
+          <button class="screen-assist-btn-small" title="Remote Screening &amp; Assistance" data-socket-id="${user.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 12px; height: 12px;">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </button>
         ` : ''}
       </div>
     `;
@@ -1277,6 +1426,13 @@ function renderOnlineUsers() {
     if (p2pBtn) {
       p2pBtn.addEventListener('click', () => {
         triggerP2PFileSelect(user.id);
+      });
+    }
+
+    const screenBtn = li.querySelector('.screen-assist-btn-small');
+    if (screenBtn) {
+      screenBtn.addEventListener('click', () => {
+        sendScreenAssistRequest(user.id, user.username);
       });
     }
 
@@ -1729,7 +1885,7 @@ async function downloadAndDecryptFile(url, fileName, fileType, originalSize, isF
     setTimeout(() => URL.revokeObjectURL(decryptedBlobUrl), 10000);
   } catch (err) {
     console.error('Failed to download and decrypt file:', err);
-    alert('Decryption download failed.');
+    showCustomAlert('Download Failed', 'Decryption download failed. The file may be corrupted or the encryption key is incorrect.', 'danger');
   }
 }
 
@@ -1977,6 +2133,11 @@ function setupEventListeners() {
     if (e.key === 'Escape') {
       toggleSidebar(false);
 
+      if (state.screenShareActive && state.screenShareType === 'viewer') {
+        stopScreenShareSession(true);
+        return;
+      }
+
       document.querySelectorAll('.modal-overlay.active').forEach(overlay => {
         overlay.classList.remove('active');
         if (overlay.id === 'preview-modal') {
@@ -2197,8 +2358,8 @@ function setupEventListeners() {
     }
   });
 
-  DOM.wbClear.addEventListener('click', () => {
-    if (confirm('Clear the collaborative whiteboard drawing canvas for everyone in the room?')) {
+  DOM.wbClear.addEventListener('click', async () => {
+    if (await showCustomConfirm('Clear Whiteboard', 'Clear the collaborative whiteboard drawing canvas for everyone in the room?', 'warning')) {
       clearLocalCanvasOnly();
       socket.emit('clear-whiteboard');
     }
@@ -2233,7 +2394,7 @@ function setupEventListeners() {
       if (res.ok && data.success) {
         loadNasDirectory();
       } else {
-        alert(data.error || 'Failed to create folder.');
+        showCustomAlert('Folder Error', data.error || 'Failed to create folder.', 'danger');
       }
     } catch (err) {
       console.error('Failed to create folder:', err);
@@ -2249,6 +2410,120 @@ function setupEventListeners() {
       queueAndUploadFiles(e.target.files, true, state.nasCurrentFolderId);
     }
     DOM.nasFileInput.value = '';
+  });
+
+  // --- Remote Screening & Assistance Event Listeners ---
+  DOM.screenAssistCancelBtn.addEventListener('click', () => {
+    DOM.screenAssistReqModal.classList.remove('active');
+  });
+
+  DOM.screenAssistExitBtn.addEventListener('click', () => {
+    stopScreenShareSession(true);
+  });
+
+  DOM.screenAssistStopShareBtn.addEventListener('click', () => {
+    stopScreenShareSession(true);
+  });
+
+  // Track viewer mouse movements relative to screen-assist video player element viewport
+  DOM.screenAssistStreamContainer.addEventListener('mousemove', (e) => {
+    if (!state.screenShareActive || state.screenShareType !== 'viewer') return;
+    const video = DOM.screenAssistVideo;
+    const rect = video.getBoundingClientRect();
+    
+    // Check if mouse cursor is within actual rendering bounds of video element
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+      const xPercent = (x / rect.width) * 100;
+      const yPercent = (y / rect.height) * 100;
+      socket.emit('screen-assist-mouse-move', { target: state.screenSharePartner, x: xPercent, y: yPercent });
+    }
+  });
+
+  // Track viewer mouse clicks relative to screen-assist video player element viewport
+  DOM.screenAssistStreamContainer.addEventListener('click', (e) => {
+    if (!state.screenShareActive || state.screenShareType !== 'viewer') return;
+    const video = DOM.screenAssistVideo;
+    const rect = video.getBoundingClientRect();
+    
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+      const xPercent = (x / rect.width) * 100;
+      const yPercent = (y / rect.height) * 100;
+      socket.emit('screen-assist-click', { target: state.screenSharePartner, x: xPercent, y: yPercent });
+    }
+  });
+
+  // Mobile touch coordination helper
+  const handleTouchMove = (e) => {
+    if (!state.screenShareActive || state.screenShareType !== 'viewer') return;
+    if (e.touches.length === 0) return;
+    
+    const touch = e.touches[0];
+    const video = DOM.screenAssistVideo;
+    const rect = video.getBoundingClientRect();
+    
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    
+    if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+      const xPercent = (x / rect.width) * 100;
+      const yPercent = (y / rect.height) * 100;
+      socket.emit('screen-assist-mouse-move', { target: state.screenSharePartner, x: xPercent, y: yPercent });
+    }
+  };
+
+  DOM.screenAssistStreamContainer.addEventListener('touchmove', handleTouchMove, { passive: true });
+  DOM.screenAssistStreamContainer.addEventListener('touchstart', handleTouchMove, { passive: true });
+
+  // Floating Keyboard Summoner for touch devices
+  DOM.screenAssistKbdBtn.addEventListener('click', () => {
+    DOM.screenAssistHiddenInput.focus();
+  });
+
+  // Intercept software keys typed in the hidden input field
+  DOM.screenAssistHiddenInput.addEventListener('keydown', (e) => {
+    if (state.screenShareActive && state.screenShareType === 'viewer') {
+      socket.emit('screen-assist-keypress', {
+        target: state.screenSharePartner,
+        key: e.key,
+        code: e.code,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        shiftKey: e.shiftKey
+      });
+      // Clear value immediately to keep text buffer empty
+      setTimeout(() => {
+        DOM.screenAssistHiddenInput.value = '';
+      }, 10);
+    }
+  });
+
+  // Global window listener to capture viewer typing keystrokes (desktop keyboard)
+  window.addEventListener('keydown', (e) => {
+    if (state.screenShareActive && state.screenShareType === 'viewer') {
+      if (e.key === 'Escape') return; // Esc handles exit naturally via existing keydown handlers
+      
+      // If viewer is typing inside a local input box or our mobile proxy, do not intercept
+      const localActiveEl = document.activeElement;
+      if (localActiveEl && (localActiveEl.tagName === 'INPUT' || localActiveEl.tagName === 'TEXTAREA' || localActiveEl.id === 'screen-assist-hidden-input')) {
+        return;
+      }
+      
+      e.preventDefault();
+      socket.emit('screen-assist-keypress', {
+        target: state.screenSharePartner,
+        key: e.key,
+        code: e.code,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        shiftKey: e.shiftKey
+      });
+    }
   });
 }
 
@@ -2303,7 +2578,7 @@ async function startCall() {
     socket.emit('join-call', state.currentChannel);
   } catch (err) {
     console.error("WebRTC: Failed to secure local media capture device stream:", err);
-    alert("Could not access microphone or camera. Please check browser permissions.");
+    showCustomAlert('Media Access Denied', 'Could not access microphone or camera. Please check your browser permissions and try again.', 'warning');
     DOM.callPanel.classList.add('hidden');
   }
 }
@@ -2455,7 +2730,7 @@ function toggleCallVideo() {
       }
     } else {
       // If we don't have a video track because we fell back to audio only
-      alert("No active camera track found.");
+      showCustomAlert('No Camera', 'No active camera track found. Your device may have started in audio-only mode.', 'warning');
     }
   }
 }
@@ -2489,8 +2764,12 @@ function triggerP2PFileSelect(targetSocketId) {
   input.click();
 }
 
-function handleP2PRequest(senderId, senderName, fileName, fileSize, fileType) {
-  const accept = confirm(`Incoming direct P2P File Transfer from "${senderName}":\nFile: ${fileName}\nSize: ${formatBytes(fileSize)}\n\nAccept transfer?`);
+async function handleP2PRequest(senderId, senderName, fileName, fileSize, fileType) {
+  const accept = await showCustomConfirm(
+    'Incoming P2P Transfer',
+    `Direct file transfer from "${senderName}":\n📄 ${fileName}\n📦 ${formatBytes(fileSize)}\n\nAccept this transfer?`,
+    'info'
+  );
   socket.emit('p2p-respond', {
     target: senderId,
     accepted: accept
@@ -2504,7 +2783,7 @@ function handleP2PRequest(senderId, senderName, fileName, fileSize, fileType) {
 function handleP2PResponse(responderId, accepted) {
   if (!accepted) {
     closeP2PToast();
-    alert('Peer rejected direct P2P file transfer.');
+    showCustomAlert('Transfer Declined', 'The recipient declined the direct P2P file transfer.', 'warning');
     if (state.pendingP2PFiles) state.pendingP2PFiles.delete(responderId);
     return;
   }
@@ -2556,7 +2835,7 @@ async function setupP2PSenderConnection(receiverId, file) {
   } catch (err) {
     console.error("P2P: Connection sender creation error:", err);
     closeP2PToast();
-    alert("Direct P2P transfer initialization failed.");
+    showCustomAlert('Transfer Failed', 'Direct P2P transfer initialization failed. Please try again.', 'danger');
   }
 }
 
@@ -2994,7 +3273,7 @@ async function loadNasDirectory() {
             ? `Delete directory "${displayedName}" permanently? All children files will be destroyed.`
             : `Delete file "${displayedName}" permanently?`;
 
-          if (!confirm(confirmMsg)) return;
+          if (!(await showCustomConfirm('Delete Item', confirmMsg, 'danger'))) return;
 
           try {
             const res = await fetch(`/api/drive?id=${encodeURIComponent(item.id)}&room=${encodeURIComponent(state.currentChannel)}`, {
@@ -3004,7 +3283,7 @@ async function loadNasDirectory() {
             if (res.ok && data.success) {
               loadNasDirectory();
             } else {
-              alert(data.error || 'Deletion failed.');
+              showCustomAlert('Deletion Failed', data.error || 'Could not delete item. Please try again.', 'danger');
             }
           } catch (err) {
             console.error("NAS: Failed to delete virtual element:", err);
@@ -3045,6 +3324,266 @@ function renderNasBreadcrumbs() {
       DOM.nasBreadcrumbs.appendChild(separator);
     }
   });
+}
+
+// ==========================================================================
+// Phase 6: Remote Screening & Interactive Assistance Controller
+// ==========================================================================
+function sendScreenAssistRequest(targetId, targetName) {
+  if (state.screenShareActive) {
+    showCustomAlert('Session Active', 'You are currently in an active screen session. Please exit the current session first.', 'warning');
+    return;
+  }
+  
+  DOM.screenAssistReqTargetName.innerText = targetName;
+  DOM.screenAssistReqModal.classList.add('active');
+  
+  // Set partner ID temporarily
+  state.screenSharePartner = targetId;
+  
+  socket.emit('screen-assist-request', { target: targetId });
+}
+
+function handleIncomingScreenRequest(senderId, senderName) {
+  if (state.screenShareActive) {
+    // Auto-decline if already in an active session
+    socket.emit('screen-assist-respond', { target: senderId, accepted: false });
+    return;
+  }
+  
+  DOM.screenAssistIncSenderName.innerText = senderName;
+  DOM.screenAssistIncModal.classList.add('active');
+  
+  // Accept trigger
+  DOM.screenAssistAcceptBtn.onclick = () => {
+    DOM.screenAssistIncModal.classList.remove('active');
+    initScreenShareHost(senderId);
+  };
+  
+  // Decline trigger
+  DOM.screenAssistDeclineBtn.onclick = () => {
+    DOM.screenAssistIncModal.classList.remove('active');
+    socket.emit('screen-assist-respond', { target: senderId, accepted: false });
+  };
+}
+
+function handleScreenRequestResponse(responderId, accepted) {
+  // If requesting modal is not active, ignore (might have canceled)
+  if (!DOM.screenAssistReqModal.classList.contains('active')) return;
+  
+  DOM.screenAssistReqModal.classList.remove('active');
+  
+  if (accepted) {
+    initScreenShareViewer(responderId);
+  } else {
+    state.screenSharePartner = null;
+    showCustomAlert('Request Declined', 'The remote assistance request was declined by the other user.', 'warning');
+  }
+}
+
+async function initScreenShareHost(viewerId) {
+  // Explicit check for mobile browsers that disable screen capture APIs in insecure HTTP contexts
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    showCustomAlert('Display Capture Blocked', 'Mobile browsers (especially iPhones/Safari) strictly require a secure HTTPS connection (SSL) to enable screen sharing APIs. Please connect via a secure cloud deployment (Render/Railway) or run a local HTTPS proxy.', 'danger');
+    socket.emit('screen-assist-respond', { target: viewerId, accepted: false });
+    return;
+  }
+
+  try {
+    state.screenShareStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { cursor: "always" },
+      audio: false
+    });
+  } catch (err) {
+    console.error("Remote Screening: Display capture failed:", err);
+    if (err.name === 'NotAllowedError') {
+      showCustomAlert('Screen Sharing Cancelled', 'Permission to capture the screen was declined or blocked by your operating system\'s settings.', 'warning');
+    } else {
+      showCustomAlert('Screen Capture Error', `${err.message || err.name}`, 'danger');
+    }
+    socket.emit('screen-assist-respond', { target: viewerId, accepted: false });
+    return;
+  }
+  
+  socket.emit('screen-assist-respond', { target: viewerId, accepted: true });
+  
+  state.screenShareActive = true;
+  state.screenSharePartner = viewerId;
+  state.screenShareType = 'host';
+  
+  // Setup remote status banner
+  DOM.screenAssistHostPartner.innerText = getUserNameBySocketId(viewerId) || 'Viewer';
+  DOM.screenAssistHostBar.classList.remove('hidden');
+  
+  // Instantiate PC
+  const pc = new RTCPeerConnection(iceConfig);
+  state.screenSharePC = pc;
+  
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      sendScreenAssistSignal({ candidate: e.candidate });
+    }
+  };
+  
+  state.screenShareStream.getTracks().forEach(track => {
+    pc.addTrack(track, state.screenShareStream);
+    track.onended = () => {
+      stopScreenShareSession(true);
+    };
+  });
+  
+  try {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    sendScreenAssistSignal({ sdp: pc.localDescription });
+  } catch (err) {
+    console.error("Remote Screening: Host WebRTC offer failed:", err);
+    stopScreenShareSession(true);
+  }
+}
+
+function initScreenShareViewer(hostId) {
+  state.screenShareActive = true;
+  state.screenSharePartner = hostId;
+  state.screenShareType = 'viewer';
+  
+  DOM.screenAssistPartnerName.innerText = getUserNameBySocketId(hostId) || 'Host';
+  DOM.screenAssistViewport.classList.remove('hidden');
+  
+  const pc = new RTCPeerConnection(iceConfig);
+  state.screenSharePC = pc;
+  
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      sendScreenAssistSignal({ candidate: e.candidate });
+    }
+  };
+  
+  pc.ontrack = (e) => {
+    DOM.screenAssistVideo.srcObject = e.streams[0];
+  };
+}
+
+function sendScreenAssistSignal(signal) {
+  if (state.screenSharePartner) {
+    socket.emit('webrtc-screen-signal', { target: state.screenSharePartner, signal });
+  }
+}
+
+async function handleScreenSignal(sender, signal) {
+  const pc = state.screenSharePC;
+  if (!pc) return;
+  
+  try {
+    if (signal.sdp) {
+      await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      if (pc.remoteDescription.type === 'offer') {
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sendScreenAssistSignal({ sdp: pc.localDescription });
+      }
+    } else if (signal.candidate) {
+      await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+    }
+  } catch (err) {
+    console.error("Remote Screening: Signal handling failed:", err);
+  }
+}
+
+function handleRemoteMouseMove(senderId, x, y) {
+  if (!state.screenShareActive || state.screenShareType !== 'host') return;
+  
+  const absoluteX = (x / 100) * window.innerWidth;
+  const absoluteY = (y / 100) * window.innerHeight;
+  
+  DOM.remoteCursor.classList.remove('hidden');
+  DOM.remoteCursor.style.left = `${absoluteX}px`;
+  DOM.remoteCursor.style.top = `${absoluteY}px`;
+  DOM.remoteCursorLabel.innerText = getUserNameBySocketId(senderId) || 'Remote Assistant';
+}
+
+function handleRemoteClick(senderId, x, y) {
+  if (!state.screenShareActive || state.screenShareType !== 'host') return;
+  
+  const absoluteX = (x / 100) * window.innerWidth;
+  const absoluteY = (y / 100) * window.innerHeight;
+  
+  // Render ripple animation at click location
+  const ripple = document.createElement('div');
+  ripple.className = 'click-ripple';
+  ripple.style.left = `${absoluteX}px`;
+  ripple.style.top = `${absoluteY}px`;
+  DOM.clickRippleContainer.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 450);
+  
+  // Virtual assistance DOM element click emulation
+  const element = document.elementFromPoint(absoluteX, absoluteY);
+  if (element) {
+    element.focus();
+    element.click();
+  }
+}
+
+function handleRemoteKeypress(senderId, key, code, ctrlKey, metaKey, shiftKey) {
+  if (!state.screenShareActive || state.screenShareType !== 'host') return;
+  
+  const activeEl = document.activeElement;
+  if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+    if (key === 'Backspace') {
+      activeEl.value = activeEl.value.slice(0, -1);
+    } else if (key === 'Enter') {
+      const form = activeEl.closest('form');
+      if (form) {
+        form.dispatchEvent(new Event('submit'));
+      } else {
+        // Trigger generic keydown enter
+        activeEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+      }
+    } else if (key.length === 1) {
+      activeEl.value += key;
+    }
+    // Fire input event to trigger UI binding changes
+    activeEl.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+function stopScreenShareSession(notifyPartner = true) {
+  if (!state.screenShareActive) return;
+  
+  if (notifyPartner && state.screenSharePartner) {
+    socket.emit('screen-assist-stop', { target: state.screenSharePartner });
+  }
+  
+  // Stop capture tracks
+  if (state.screenShareStream) {
+    state.screenShareStream.getTracks().forEach(track => track.stop());
+    state.screenShareStream = null;
+  }
+  
+  // Tear WebRTC connection
+  if (state.screenSharePC) {
+    state.screenSharePC.close();
+    state.screenSharePC = null;
+  }
+  
+  // Clean elements and reset viewports
+  DOM.screenAssistVideo.srcObject = null;
+  DOM.screenAssistViewport.classList.add('hidden');
+  DOM.screenAssistHostBar.classList.add('hidden');
+  DOM.remoteCursor.classList.add('hidden');
+  DOM.screenAssistHiddenInput.value = '';
+  DOM.screenAssistHiddenInput.blur();
+  
+  state.screenShareActive = false;
+  state.screenSharePartner = null;
+  state.screenShareType = null;
+  
+  console.log("Remote Screening: Assistance session closed.");
+}
+
+function getUserNameBySocketId(socketId) {
+  const user = state.onlineUsers.find(u => u.id === socketId);
+  return user ? user.username : null;
 }
 
 // ==========================================================================

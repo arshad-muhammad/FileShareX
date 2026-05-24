@@ -788,6 +788,63 @@ io.on('connection', (socket) => {
     io.to(user.currentChannel).emit('clear-whiteboard');
   });
 
+  // --- Remote Screening & Interactive Assistance ---
+  socket.on('screen-assist-request', ({ target }) => {
+    const sender = onlineUsers.get(socket.id);
+    if (!sender) return;
+    io.to(target).emit('screen-assist-request', {
+      senderId: socket.id,
+      senderName: sender.username
+    });
+  });
+
+  socket.on('screen-assist-respond', ({ target, accepted }) => {
+    io.to(target).emit('screen-assist-respond', {
+      responderId: socket.id,
+      accepted
+    });
+  });
+
+  socket.on('webrtc-screen-signal', ({ target, signal }) => {
+    io.to(target).emit('webrtc-screen-signal', {
+      sender: socket.id,
+      signal
+    });
+  });
+
+  socket.on('screen-assist-mouse-move', ({ target, x, y }) => {
+    io.to(target).emit('screen-assist-mouse-move', {
+      senderId: socket.id,
+      x,
+      y
+    });
+  });
+
+  socket.on('screen-assist-click', ({ target, x, y }) => {
+    io.to(target).emit('screen-assist-click', {
+      senderId: socket.id,
+      x,
+      y
+    });
+  });
+
+  socket.on('screen-assist-keypress', ({ target, key, code, ctrlKey, metaKey, shiftKey }) => {
+    io.to(target).emit('screen-assist-keypress', {
+      senderId: socket.id,
+      key,
+      code,
+      ctrlKey,
+      metaKey,
+      shiftKey
+    });
+  });
+
+  socket.on('screen-assist-stop', ({ target }) => {
+    io.to(target).emit('screen-assist-stop', {
+      senderId: socket.id
+    });
+  });
+
   // Handle Disconnect
   socket.on('disconnect', () => {
     const user = onlineUsers.get(socket.id);
