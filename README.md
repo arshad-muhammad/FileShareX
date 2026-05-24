@@ -26,6 +26,8 @@
 *   **🛡️ Cryptographic Integrity Checks**: Client computes SHA-256 hashes sequentially (utilizing native Web Crypto API or high-performance chunked `IncrementalSHA256` fallbacks for insecure HTTP environments) which are verified by the server before final compilation. This incremental hashing prevents browser loop freezes and connection timeouts on large files.
 *   **💾 Robust SQLite & JSON Fallback History**: Fully persistent sqlite3 database stores all chat logs and share details. Fallback mechanism switches gracefully to a robust atomic JSON file structure if native compilation errors occur.
 *   **🎨 Premium Futuristic Glassmorphic Theme**: Dark Obsidian styling (`#08080f` base), smooth micro-interactions, responsive mobile drawer, dynamic typing indicator, live user search, message removal, and host-creator room deletion.
+*   **🖥️ Remote Screening & Interactive Control**: Click any online user in the room to send a remote assistance request. Once accepted, their screen streams to you in a full-screen immersive viewer. You gain interactive mouse, keyboard, touch, and scroll control over their device through a WebRTC relay — enabling real-time remote collaboration, debugging, and IT support. Works across desktops and mobile devices (with HTTPS/SSL for mobile capture APIs).
+*   **💎 Custom Glassmorphic UI Dialogs**: All browser-native `alert()` and `confirm()` popups have been replaced with a themed, glassmorphic modal overlay system. Every dialog features contextual icons (info, success, warning, danger), color-coded styling, and smooth animations — ensuring a premium, consistent user experience across every interaction.
 
 ---
 
@@ -170,6 +172,10 @@ graph TD
     
     D --> P[Virtual NAS Drive]
     P -->|Create Folders / Upload| Q[Securely store nested files in server persistent drive]
+    
+    D --> R[Remote Screen Assistance]
+    R -->|Click Online User| S[Send screen control request via Socket.IO]
+    S -->|Accepted| T[WebRTC peer connection established - full screen stream + interactive control]
 ```
 
 ---
@@ -212,6 +218,16 @@ graph TD
 5.  **Interactive Navigation**: Double-click folders to navigate deeper, and use the breadcrumbs at the top of the explorer to click and return back.
 6.  **Download, Preview, and Delete**: Use action buttons on the right of any file row to preview supported formats (images, videos, PDFs) inside a secure decrypted viewer, download the file, or delete it permanently from the host storage.
 
+### 6. Remote Screening & Interactive Assistance
+1.  Locate a user in the **Online In Room** panel on the right sidebar.
+2.  Click on any online user (other than yourself) to send a **Remote Assistance Request**.
+3.  The target user receives a glassmorphic incoming request modal with Accept/Decline options.
+4.  **If Accepted**: The target user's screen is captured via `getDisplayMedia` and streamed through a WebRTC peer connection to the requester.
+5.  **Immersive Viewer**: The requester sees the remote screen in a full-screen, distraction-free overlay with a floating exit button.
+6.  **Interactive Control**: Mouse movements, clicks, keyboard input, scroll events, and touch gestures are relayed back to the host device, enabling real-time remote control.
+7.  **Mobile Support**: On mobile devices, a floating virtual keyboard button summons the native soft keyboard for text input. Note: Mobile screen capture requires a **secure HTTPS** context (SSL).
+8.  **Exit**: Press the **Exit** button (top-right corner) or press `Escape` to disconnect and end the remote session cleanly.
+
 ---
 
 ## 🔒 Security & Privacy Notes
@@ -219,6 +235,8 @@ graph TD
 *   **Zero-Knowledge local cryptos**: Chat histories, filenames, and binary files are encrypted in-browser before leaving your machine. The host server holds only raw ciphertext arrays and cryptographic IVs.
 *   **Subnet-restricted operation**: All data, streams, calls, and discover beacons are confined to your local network card interfaces. No data leaks to third-party cloud relays.
 *   **Buffer overflow protection**: High-performance direct transfers restrict WebRTC channel chunks to 16KB, dynamically polling `bufferedAmount` to ensure seamless low-latency streams without device freeze-ups.
+*   **Remote Screening guardrails**: Screen sharing sessions require explicit user consent (Accept/Decline modal). Mobile browsers enforce HTTPS for `getDisplayMedia`. The viewer can only interact while the session is active — disconnection immediately terminates all relay channels.
+*   **No native browser popups**: All system dialogs are rendered through a custom in-app modal system, preventing phishing-style browser chrome interruptions and ensuring consistent UX security cues.
 
 ---
 
