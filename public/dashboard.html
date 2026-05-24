@@ -557,6 +557,133 @@
     </div>
   </div>
 
+  <!-- ========================================== -->
+  <!-- REMOTE SCREENING & ASSISTANCE SYSTEM      -->
+  <!-- ========================================== -->
+
+  <!-- 7. Screen Assist Requesting Modal -->
+  <div id="screen-assist-request-modal" class="modal-overlay">
+    <div class="modal-card select-user-card animate-scale" style="max-width: 400px; padding: 25px;">
+      <div class="room-pwd-info">
+        <div class="room-pwd-icon animate-pulse" style="background: rgba(90, 92, 240, 0.15); color: #5a5cf0; margin: 0 auto 15px auto;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 28px; height: 28px;">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
+        <h3>Requesting Screening Access</h3>
+        <p style="color: var(--text-secondary); text-align: center; margin-top: 10px; font-size: 0.95rem;">
+          Waiting for <strong id="screen-assist-request-target-name">User</strong> to accept and share their screen...
+        </p>
+      </div>
+      <button id="screen-assist-cancel-btn" class="primary-btn danger-btn" style="margin-top: 20px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444;">Cancel Request</button>
+    </div>
+  </div>
+
+  <!-- 8. Screen Assist Incoming Modal -->
+  <div id="screen-assist-incoming-modal" class="modal-overlay">
+    <div class="modal-card select-user-card animate-scale" style="max-width: 400px; padding: 25px;">
+      <div class="room-pwd-info">
+        <div class="room-pwd-icon animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: #10b981; margin: 0 auto 15px auto;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 28px; height: 28px;">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
+        <h3>Remote Screening Request</h3>
+        <p style="color: var(--text-secondary); text-align: center; margin-top: 10px; font-size: 0.95rem;">
+          <strong id="screen-assist-incoming-sender-name">User</strong> is requesting screening access to assist you.
+        </p>
+        <span style="font-size: 0.8rem; color: #8b5cf6; margin-top: 8px; display: inline-block; text-align: center;">This grants interactive cursor and click capabilities inside FileShareX.</span>
+      </div>
+      <div style="display: flex; gap: 10px; width: 100%; margin-top: 20px;">
+        <button id="screen-assist-accept-btn" class="primary-btn" style="flex: 1; background: #10b981; color: white;">Accept &amp; Share</button>
+        <button id="screen-assist-decline-btn" class="primary-btn danger-btn" style="flex: 1; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 10px;">Decline</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. Fullscreen Remote Assistance Viewport -->
+  <div id="screen-assist-viewport" class="screen-assist-viewport hidden">
+    <div class="screen-assist-header">
+      <span class="live-assist-badge">
+        <span class="assist-pulse-dot"></span>
+        <span>Remote Screening Session : <strong id="screen-assist-partner-name">User</strong></span>
+      </span>
+      <button id="screen-assist-exit-btn" class="screen-assist-exit-btn" title="Exit Screen Assist (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        Exit Screen Assist
+      </button>
+    </div>
+    <div class="screen-assist-stream-container" id="screen-assist-stream-container">
+      <video id="screen-assist-video" autoplay playsinline></video>
+    </div>
+    <!-- Hidden input to summon Mobile software keyboard -->
+    <input type="text" id="screen-assist-hidden-input" style="position: absolute; top: -9999px; left: -9999px; opacity: 0; pointer-events: none;" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <!-- Floating Virtual Keyboard button for Mobile/Tablet users -->
+    <button id="screen-assist-kbd-btn" class="screen-assist-kbd-btn" title="Summon Keyboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;">
+        <rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect>
+        <line x1="6" y1="9" x2="6.01" y2="9"></line>
+        <line x1="10" y1="9" x2="10.01" y2="9"></line>
+        <line x1="14" y1="9" x2="14.01" y2="9"></line>
+        <line x1="18" y1="9" x2="18.01" y2="9"></line>
+        <line x1="6" y1="13" x2="6.01" y2="13"></line>
+        <line x1="18" y1="13" x2="18.01" y2="13"></line>
+        <line x1="10" y1="13" x2="14" y2="13"></line>
+      </svg>
+    </button>
+  </div>
+
+  <!-- 10. Floating Host Status Bar -->
+  <div id="screen-assist-host-bar" class="screen-assist-host-bar hidden">
+    <div class="host-bar-content">
+      <span class="host-pulse-dot animate-pulse"></span>
+      <span>Sharing screen with <strong id="screen-assist-host-partner">User</strong> | Assistance Active</span>
+      <button id="screen-assist-stop-share-btn" class="stop-share-btn">Stop Sharing</button>
+    </div>
+  </div>
+
+  <!-- 11. Remote Cursor Element -->
+  <div id="remote-cursor" class="remote-cursor hidden">
+    <div class="cursor-dot"></div>
+    <div class="cursor-label" id="remote-cursor-label">User</div>
+  </div>
+
+  <!-- 12. Click Ripples Container -->
+  <div id="click-ripple-container" class="click-ripple-container"></div>
+
+  <!-- 13. Custom Glassmorphic Dialog Modal -->
+  <div id="custom-dialog-modal" class="modal-overlay">
+    <div class="modal-card select-user-card animate-scale" style="max-width: 420px; padding: 25px;">
+      <div class="room-pwd-info" style="flex-direction: column; background: transparent; border: none; padding: 0; margin-bottom: 10px;">
+        <div id="custom-dialog-icon" class="room-pwd-icon" style="width: 48px; height: 48px; border-radius: 50%; background: rgba(90, 92, 240, 0.12); color: #5a5cf0; margin: 0 auto 15px auto; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        </div>
+        <h3 id="custom-dialog-title" style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Notification</h3>
+        <p id="custom-dialog-message" style="color: var(--text-secondary); text-align: center; font-size: 0.9rem; line-height: 1.5; margin: 0;"></p>
+      </div>
+      
+      <!-- Input container for custom prompts -->
+      <div id="custom-dialog-input-container" class="form-group hidden" style="width: 100%; text-align: left; margin: 15px 0 5px 0;">
+        <input type="text" id="custom-dialog-input" placeholder="Type here..." autocomplete="off" style="width: 100%; padding: 10px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-md); color: var(--text-primary); font-size: 0.88rem;">
+      </div>
+
+      <div id="custom-dialog-buttons" style="display: flex; gap: 10px; width: 100%; margin-top: 15px;">
+        <!-- Buttons dynamically generated -->
+      </div>
+    </div>
+  </div>
+
   <!-- Client Socket.IO Library -->
   <script src="/socket.io/socket.io.js"></script>
   <!-- Client JS Application -->
