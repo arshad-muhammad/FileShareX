@@ -1375,6 +1375,35 @@ a { color: inherit; text-decoration: none; }
   z-index: 1;
 }
 
+/* Premium Responsive P2P Bento Styles */
+.bento-topology.p2p-bento {
+  width: 100%;
+  max-width: 320px;
+  justify-content: space-between;
+  position: relative;
+  margin: 0 auto;
+}
+
+.bento-topology.p2p-bento .bento-node {
+  width: auto;
+  height: auto;
+  padding: 6px 14px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+.bento-topology.p2p-bento .bento-line {
+  position: absolute;
+  top: 50%;
+  left: 30px;
+  right: 30px;
+  width: auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent) 100%);
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
 /* Offline badge visual */
 .bento-offline-badge {
   display: flex;

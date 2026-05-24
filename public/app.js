@@ -15,6 +15,7 @@ const state = {
   channelPasswords: {}, // roomId -> password plaintext
   onlineUsers: [],
   activeUploads: new Map(), // uploadId -> uploadTask
+  p2pFiles: new Map(), // fileId -> File object
   searchQuery: '',
   isTyping: false,
   typingTimeout: null,
@@ -911,9 +912,68 @@ function setupSocket() {
 
   socket.on('message', async (msg) => {
     const isNearBottom = DOM.messagesContainer.scrollHeight - DOM.messagesContainer.scrollTop - DOM.messagesContainer.clientHeight < 150;
+    
+    let displayedFileName = msg.fileName;
+    if (msg.type === 'file' || msg.type === 'p2p-file') {
+      if (msg.fileName && msg.fileName.startsWith('__FSX_ENC_NAME__:')) {
+        const cipher = msg.fileName.substring(17);
+        try {
+          displayedFileName = state.currentChannelKey ? await decryptText(cipher, state.currentChannelKey, false) : '🔒 [Encrypted File]';
+        } catch (e) {}
+      } else if (msg.fileName && msg.fileName.startsWith('__FSX_FALLBACK_ENC_NAME__:')) {
+        const cipher = msg.fileName.substring(26);
+        try {
+          displayedFileName = state.currentChannelKey ? await decryptText(cipher, state.currentChannelKey, true) : '🔒 [Encrypted File]';
+        } catch (e) {}
+      }
+    }
+
     await appendMessage(msg);
     if (isNearBottom || msg.username === state.username) {
       scrollToBottom();
+    }
+
+    // Trigger Notification for other users
+    if (msg.username !== state.username) {
+      let notifBody = msg.message || 'Shared a file';
+      
+      if (msg.type === 'text' && msg.message && msg.message.startsWith('__FSX_FALLBACK_ENC_TEXT__:')) {
+        const cipher = msg.message.substring(26);
+        try {
+          if (state.currentChannelKey) {
+            notifBody = await decryptText(cipher, state.currentChannelKey, true);
+          } else {
+            notifBody = '🔒 [Encrypted Message]';
+          }
+        } catch (e) {
+          notifBody = '⚠️ [Decryption Failed]';
+        }
+      } else if (msg.type === 'file' || msg.type === 'p2p-file') {
+        notifBody = `📎 File: ${displayedFileName}`;
+      }
+
+      if (document.hidden) {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            const n = new Notification(`FileShareX : ${msg.username}`, {
+              body: notifBody,
+              icon: 'logo.png',
+              tag: msg.channel
+            });
+            n.onclick = () => {
+              window.focus();
+              if (state.currentChannel !== msg.channel) {
+                doJoinChannel(msg.channel, null);
+              }
+              n.close();
+            };
+          } catch (e) {
+            console.error('Failed to trigger native notification:', e);
+          }
+        }
+      } else {
+        showInAppNotification(msg, `Message from ${msg.username}`, notifBody);
+      }
     }
   });
 
@@ -925,6 +985,7 @@ function setupSocket() {
   socket.on('user-list-update', (users) => {
     state.onlineUsers = users;
     renderOnlineUsers();
+    updateP2PFileButtons();
   });
 
   // Room list updates from server
@@ -990,6 +1051,16 @@ function setupSocket() {
 
   socket.on('p2p-respond', ({ responderId, accepted }) => {
     handleP2PResponse(responderId, accepted);
+  });
+
+  socket.on('p2p-room-request', ({ senderId, senderName, fileId, fileName }) => {
+    const p2pItem = state.p2pFiles.get(fileId);
+    if (!p2pItem) {
+      console.warn(`P2P Room: File ID ${fileId} not found in memory.`);
+      return;
+    }
+    showP2PToast(`Connecting to peer for direct transfer...`, 0);
+    setupP2PSenderConnection(senderId, p2pItem);
   });
 
   // Phase 4: Collaborative Whiteboard Sockets
@@ -1135,7 +1206,7 @@ async function appendMessage(msg) {
 
   let displayedFileName = msg.fileName;
   let isFallbackFile = false;
-  if (msg.type === 'file') {
+  if (msg.type === 'file' || msg.type === 'p2p-file') {
     if (msg.fileName && msg.fileName.startsWith('__FSX_ENC_NAME__:')) {
       const cipher = msg.fileName.substring(17);
       try {
@@ -1195,37 +1266,64 @@ async function appendMessage(msg) {
   const contentContainer = msgGroup.querySelector('.msg-content');
   if (msg.type === 'text') {
     contentContainer.innerHTML = `<p class="chat-bubble-text">${escapeHTML(displayedMsg)}</p>`;
-  } else if (msg.type === 'file') {
+  } else if (msg.type === 'file' || msg.type === 'p2p-file') {
     const isImage = msg.fileType && msg.fileType.startsWith('image/');
-    const fileCard = document.createElement('div');
-    fileCard.className = `file-bubble-card ${isImage ? 'image-type' : ''}`;
+    const isP2P = msg.type === 'p2p-file';
     
-    let previewHtml = '';
-    if (isImage) {
-      previewHtml = `
-        <div class="file-image-preview-wrapper nas-item-clickable">
-          <div class="preview-fallback-container">
-            <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-            <span style="font-size: 0.8rem; margin-top: 4px; color: var(--text-secondary);">Secure Image Preview</span>
-          </div>
-        </div>
-      `;
-    } else {
-      previewHtml = `
-        <div class="file-generic-preview-wrapper">
-          <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-        </div>
-      `;
+    const fileCard = document.createElement('div');
+    fileCard.className = `file-card ${isImage ? 'image-type' : ''}`;
+    
+    // Show premium visual icon based on file extension/type
+    const iconHtml = getFileTypeSVG(displayedFileName, msg.fileType);
+    const previewHtml = `
+      <div class="file-icon-box">
+        ${iconHtml}
+      </div>
+    `;
+
+    // Extract the fileId from fileUrl: `p2p:${fileId}:${senderSocketId}`
+    let fileId = '';
+    if (isP2P && msg.fileUrl && msg.fileUrl.startsWith('p2p:')) {
+      const parts = msg.fileUrl.split(':');
+      fileId = parts[1];
+    }
+
+    // Determine sender's online status
+    let isSenderOnline = false;
+    let senderSocketId = '';
+    if (isP2P) {
+      const foundUser = state.onlineUsers.find(u => u.username === msg.username);
+      if (foundUser) {
+        isSenderOnline = true;
+        senderSocketId = foundUser.id;
+      }
+    }
+
+    // Let the user download their own P2P files locally since they have it in memory or file system
+    const isSelfShared = msg.username === state.username;
+
+    let p2pStatusBadge = '';
+    if (isP2P) {
+      if (isSelfShared) {
+        p2pStatusBadge = `<span style="font-size: 0.65rem; color: #8b5cf6; font-weight: bold; background: rgba(139, 92, 246, 0.12); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.2);">Sent (P2P Source)</span>`;
+      } else if (isSenderOnline) {
+        p2pStatusBadge = `<span style="font-size: 0.65rem; color: #10b981; font-weight: bold; background: rgba(16, 185, 129, 0.12); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.2); animation: pulse 2s infinite;">Online (P2P Direct)</span>`;
+      } else {
+        p2pStatusBadge = `<span style="font-size: 0.65rem; color: var(--text-muted); font-weight: bold; background: rgba(255, 255, 255, 0.04); padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border);">Offline (P2P Source)</span>`;
+      }
     }
 
     fileCard.innerHTML = `
       ${previewHtml}
-      <div class="file-bubble-meta">
-        <span class="file-bubble-name" title="${escapeHTML(displayedFileName)}">${escapeHTML(displayedFileName)}</span>
-        <span class="file-bubble-size">${formatBytes(msg.fileSize)}</span>
+      <div class="file-details">
+        <span class="file-name" title="${escapeHTML(displayedFileName)}">${escapeHTML(displayedFileName)}</span>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 1px;">
+          <span class="file-size">${formatBytes(msg.fileSize)}</span>
+          ${p2pStatusBadge}
+        </div>
       </div>
-      <div class="file-bubble-actions">
-        ${(isImage || (msg.fileType && msg.fileType.startsWith('video/')) || (msg.fileType && msg.fileType === 'application/pdf')) ? `
+      <div class="file-actions">
+        ${(!isP2P && (isImage || (msg.fileType && msg.fileType.startsWith('video/')) || (msg.fileType && msg.fileType === 'application/pdf'))) ? `
           <button class="file-action-btn view-btn" title="Preview file">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -1233,13 +1331,26 @@ async function appendMessage(msg) {
             </svg>
           </button>
         ` : ''}
-        <button class="file-action-btn download-btn" title="Download File">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-        </button>
+        ${isP2P ? `
+          <button class="file-action-btn download-btn ${(!isSenderOnline && !isSelfShared) ? 'disabled' : ''}" 
+                  style="${(isSenderOnline || isSelfShared) ? 'border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.05); color: #10b981;' : 'opacity: 0.5; cursor: not-allowed;'}" 
+                  title="${(isSenderOnline || isSelfShared) ? 'Download directly via P2P' : 'Sender is offline. P2P source must be online to transfer.'}"
+                  ${(!isSenderOnline && !isSelfShared) ? 'disabled' : ''}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+        ` : `
+          <button class="file-action-btn download-btn" title="Download File">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+        `}
       </div>
     `;
 
@@ -1247,12 +1358,38 @@ async function appendMessage(msg) {
     if (viewBtn) viewBtn.addEventListener('click', () => openDecryptedPreviewModal(displayedFileName, msg.fileUrl, msg.fileType, msg.fileSize, isFallbackFile));
 
     const dlBtn = fileCard.querySelector('.download-btn');
-    if (dlBtn) dlBtn.addEventListener('click', (e) => handleFileDownloadClick(e, msg.fileUrl, displayedFileName, msg.fileType, msg.fileSize, isFallbackFile));
+    if (dlBtn) {
+      if (isP2P) {
+        dlBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (isSelfShared) {
+            const localP2P = state.p2pFiles.get(fileId);
+            if (localP2P) {
+              const url = URL.createObjectURL(localP2P);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = localP2P.name;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            } else {
+              showCustomAlert('File Error', 'Local file reference lost from browser memory.', 'danger');
+            }
+          } else {
+            initiateRoomP2PDownload(msg.username, senderSocketId, fileId, displayedFileName, msg.fileSize, msg.fileType);
+          }
+        });
+      } else {
+        dlBtn.addEventListener('click', (e) => handleFileDownloadClick(e, msg.fileUrl, displayedFileName, msg.fileType, msg.fileSize, isFallbackFile));
+      }
+    }
 
     contentContainer.appendChild(fileCard);
   }
 
   DOM.messagesContainer.appendChild(msgGroup);
+  updateP2PFileButtons();
 }
 
 // Add system message
@@ -2018,6 +2155,11 @@ function setupEventListeners() {
       DOM.currentUserName.innerText = selectedUsername;
       DOM.currentUserAvatar.innerText = selectedUsername.charAt(0).toUpperCase();
 
+      // Request browser Notification permission dynamically
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
       // Persist for future sessions
       localStorage.setItem('fsx_username', selectedUsername);
 
@@ -2216,7 +2358,7 @@ function setupEventListeners() {
   // 4. File attachments selector triggers
   DOM.attachmentBtn.addEventListener('click', () => DOM.fileSelector.click());
   DOM.fileSelector.addEventListener('change', (e) => {
-    queueAndUploadFiles(e.target.files);
+    shareFilesP2PRoom(e.target.files);
     DOM.fileSelector.value = ''; // Reset input to let users upload same file again
   });
 
@@ -2241,7 +2383,7 @@ function setupEventListeners() {
     e.preventDefault();
     DOM.dragDropZone.classList.remove('active');
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      queueAndUploadFiles(e.dataTransfer.files);
+      shareFilesP2PRoom(e.dataTransfer.files);
     }
   });
 
@@ -2733,6 +2875,103 @@ function toggleCallVideo() {
       showCustomAlert('No Camera', 'No active camera track found. Your device may have started in audio-only mode.', 'warning');
     }
   }
+}
+
+// ==========================================================================
+// Room-Based P2P File Sharing Extensions
+// ==========================================================================
+async function shareFilesP2PRoom(filesList) {
+  if (!filesList || filesList.length === 0) return;
+  for (const file of filesList) {
+    const fileId = generateUUID();
+    state.p2pFiles.set(fileId, file);
+    
+    let finalFileName = file.name;
+    if (state.currentChannelKey) {
+      try {
+        const encName = await encryptText(file.name, state.currentChannelKey);
+        finalFileName = `__FSX_FALLBACK_ENC_NAME__:${encName}`;
+      } catch (err) {
+        console.error('Filename encryption failed:', err);
+      }
+    }
+
+    socket.emit('send-p2p-file', {
+      fileId: fileId,
+      fileName: finalFileName,
+      fileSize: file.size,
+      fileType: file.type || 'application/octet-stream'
+    });
+  }
+}
+
+function initiateRoomP2PDownload(senderUsername, senderSocketId, fileId, fileName, fileSize, fileType) {
+  if (!senderSocketId) {
+    showCustomAlert('Sender Offline', 'The sender is not online. P2P transfers require the sender to be active in the room.', 'warning');
+    return;
+  }
+  
+  showP2PToast(`Connecting for direct P2P transfer...`, 0);
+  setupP2PReceiverConnection(senderSocketId, fileName, fileSize, fileType);
+  
+  socket.emit('p2p-room-request', {
+    target: senderSocketId,
+    fileId,
+    fileName,
+    fileSize,
+    fileType
+  });
+}
+
+function updateP2PFileButtons() {
+  const fileCards = document.querySelectorAll('.file-card');
+  fileCards.forEach(card => {
+    const downloadBtn = card.querySelector('.download-btn');
+    if (!downloadBtn) return;
+    
+    const titleText = downloadBtn.getAttribute('title') || '';
+    const isP2PButton = titleText.includes('P2P') || titleText.includes('offline') || titleText.includes('transfer');
+    if (!isP2PButton) return;
+
+    const msgGroup = card.closest('.msg-group');
+    if (!msgGroup) return;
+    const senderNameEl = msgGroup.querySelector('.msg-meta .sender');
+    if (!senderNameEl) return;
+    const senderUsername = senderNameEl.innerText.trim();
+
+    const isSelfShared = senderUsername === state.username;
+    const foundUser = state.onlineUsers.find(u => u.username === senderUsername);
+    const isSenderOnline = !!foundUser;
+
+    const badgeContainer = card.querySelector('.file-details div');
+    const existingBadge = badgeContainer ? badgeContainer.querySelector('span:nth-child(2)') : null;
+
+    if (isSelfShared) {
+      if (existingBadge) {
+        existingBadge.outerHTML = `<span style="font-size: 0.65rem; color: #8b5cf6; font-weight: bold; background: rgba(139, 92, 246, 0.12); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.2);">Sent (P2P Source)</span>`;
+      }
+      downloadBtn.className = 'file-action-btn download-btn';
+      downloadBtn.removeAttribute('disabled');
+      downloadBtn.style.cssText = 'border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.05); color: #10b981;';
+      downloadBtn.setAttribute('title', 'Download directly via P2P');
+    } else if (isSenderOnline) {
+      if (existingBadge) {
+        existingBadge.outerHTML = `<span style="font-size: 0.65rem; color: #10b981; font-weight: bold; background: rgba(16, 185, 129, 0.12); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.2); animation: pulse 2s infinite;">Online (P2P Direct)</span>`;
+      }
+      downloadBtn.className = 'file-action-btn download-btn';
+      downloadBtn.removeAttribute('disabled');
+      downloadBtn.style.cssText = 'border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.05); color: #10b981;';
+      downloadBtn.setAttribute('title', 'Download directly via P2P');
+    } else {
+      if (existingBadge) {
+        existingBadge.outerHTML = `<span style="font-size: 0.65rem; color: var(--text-muted); font-weight: bold; background: rgba(255, 255, 255, 0.04); padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border);">Offline (P2P Source)</span>`;
+      }
+      downloadBtn.className = 'file-action-btn download-btn disabled';
+      downloadBtn.setAttribute('disabled', 'true');
+      downloadBtn.style.cssText = 'opacity: 0.5; cursor: not-allowed;';
+      downloadBtn.setAttribute('title', 'Sender is offline. P2P source must be online to transfer.');
+    }
+  });
 }
 
 // ==========================================================================
@@ -3584,6 +3823,140 @@ function stopScreenShareSession(notifyPartner = true) {
 function getUserNameBySocketId(socketId) {
   const user = state.onlineUsers.find(u => u.id === socketId);
   return user ? user.username : null;
+}
+
+// ==========================================================================
+// Phase 6: Real-time Synthesized Audio & In-App Glassmorphic Notifications
+// ==========================================================================
+function playNotificationChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Play a dual-tone warm synth chime
+    const playTone = (freq, startTime, duration) => {
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      
+      gainNode.gain.setValueAtTime(0.12, startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    };
+
+    // Synthesize a beautiful double chime: ding-ling!
+    const now = ctx.currentTime;
+    playTone(587.33, now, 0.4);        // D5 note
+    playTone(880.00, now + 0.08, 0.55);   // A5 note
+  } catch (err) {
+    console.warn('Web Audio chime blocked or unsupported:', err);
+  }
+}
+
+function showInAppNotification(msg, title, body) {
+  let container = document.getElementById('inapp-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'inapp-toast-container';
+    container.style.cssText = `
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 99999;
+      pointer-events: none;
+    `;
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = 'inapp-toast';
+  toast.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(18, 18, 29, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: var(--text-primary);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    width: 320px;
+    pointer-events: auto;
+    cursor: pointer;
+    transform: translateX(100px);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+  `;
+
+  const avatarCol = getAvatarColor(msg.username || 'System');
+  const initial = (msg.username || 'S')[0].toUpperCase();
+
+  toast.innerHTML = `
+    <div class="avatar" style="background-color: ${avatarCol}; width: 36px; height: 36px; min-width: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 700; color: #fff;">${initial}</div>
+    <div style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
+      <span style="font-weight: 600; font-size: 0.82rem; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+        ${escapeHTML(msg.username)}
+        <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: normal;">in ${msg.channel}</span>
+      </span>
+      <span style="font-size: 0.76rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
+        ${escapeHTML(body)}
+      </span>
+    </div>
+    <button style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px; transition: color 0.2s;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 12px; height: 12px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+  `;
+
+  // Close click
+  const closeBtn = toast.querySelector('button');
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toast.style.transform = 'translateX(100px) scale(0.9)';
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  });
+
+  // Body click
+  toast.addEventListener('click', () => {
+    window.focus();
+    if (state.currentChannel !== msg.channel) {
+      doJoinChannel(msg.channel, null);
+    }
+    toast.style.transform = 'translateX(100px) scale(0.9)';
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  });
+
+  container.appendChild(toast);
+
+  // Trigger animation entry
+  setTimeout(() => {
+    toast.style.transform = 'translateX(0)';
+    toast.style.opacity = '1';
+  }, 10);
+
+  // Play synthetic chime
+  playNotificationChime();
+
+  // Slide out automatically
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.style.transform = 'translateX(100px) scale(0.9)';
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 4000);
 }
 
 // ==========================================================================
