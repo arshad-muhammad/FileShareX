@@ -73,6 +73,28 @@ sequenceDiagram
     Note over ClientB: Message renders beautifully in clear text
 ```
 
+## 🖥️ Desktop Application (Electron) & Onboarding Tour
+
+FileShareX is packaged as a **production-grade native desktop application** built on **Electron**. The desktop client introduces robust local capabilities and an interactive user onboarding flow:
+
+*   **⚡ Native Server Integration**: The main process (`electron/main.js`) launches the local Express and Socket.IO servers dynamically.
+*   **🔌 Dynamic Port Allocation**: If port `3000` is in use, Electron automatically scans ports sequentially to find the first open interface (preventing server clashes).
+*   **📁 Persistent Local OS Storage**: SQLite databases, settings, and NAS files are persisted under secure native OS application paths (e.g. `%APPDATA%/FileShareX` on Windows, `~/Library/Application Support/FileShareX` on macOS).
+*   **🌟 Multi-Slide Onboarding Tour**: First-time application launches (detected via `localStorage`) are greeted by a premium, glassmorphic onboarding wizard modal:
+    *   **Slide 1: Welcome Screen** - Displays the high-resolution brand logo with a custom spring intro bounce (`@keyframes springIntro`).
+    *   **Slide 2: Features Showcase** - Dynamic carousel showcasing LAN sharing, E2EE, drawing whiteboard, and Virtual NAS.
+    *   **Slide 3: Identity Setup** - Configure display nicknames with a real-time capital initials avatar badge generator.
+    *   **Slide 4: Privacy Policy Agreement** - Features legal Zero-Knowledge details and links to the hosted privacy page. The "Finish" connection button is disabled/locked until the checkbox is explicitly consented.
+
+---
+
+## 🌐 Next.js App Router Website
+The marketing website, product listings, download badges, and documentation pages have been fully rewritten into a high-performance **Next.js (App Router)** static React application.
+
+*   **Static Exporting (`output: 'export'`)**: Compiles React files into standard offline static pages under `/out`.
+*   **Unified Delivery**: The Express server (`server.js`) maps the static static routes to serve `/out` locally for LAN users, while the root Next.js workspace is optimized to deploy directly as a serverless static website on platforms like **Vercel**!
+*   **Privacy Policy page (`/privacy`)**: Dedicated glassmorphic React route detailing local isolation parameters.
+
 ---
 
 ## ⚙️ Setup & Configuration Guide
@@ -81,7 +103,7 @@ Setting up FileShareX on your local network is fast, clean, and requires zero cl
 
 ### 📋 Prerequisites
 Ensure you have the following installed on the host computer:
-*   [Node.js](https://nodejs.org/) (Version 16.0 or higher)
+*   [Node.js](https://nodejs.org/) (Version 18.0 or higher recommended)
 *   [npm](https://www.npmjs.com/) (bundled automatically with Node.js)
 
 ### 💻 Step-by-Step Installation
@@ -90,29 +112,52 @@ Ensure you have the following installed on the host computer:
     git clone https://github.com/arshad-muhammad/FileShareX.git
     cd FileShareX
     ```
-2.  **Install lightweight dependencies**:
+2.  **Install project dependencies**:
     ```bash
     npm install
     ```
-    *This will install crucial modules: `express`, `socket.io`, `sqlite3`, `multer`, `qrcode`, and `ip`.*
+    *This will install Node modules like `express`, `socket.io`, `sqlite3`, `multer`, `qrcode`, `next`, `react`, and `react-dom`.*
 
-3.  **Boot the platform**:
+### 🚀 Available CLI Commands
+
+#### Local Server Operations (Web Browser Access)
+*   **Build the Next.js static pages**:
     ```bash
-    node server.js
+    npm run web:build
+    ```
+    *Statically compiles your landing and privacy pages into the `/out` directory.*
+*   **Run the local Express Server**:
+    ```bash
+    npm start
+    ```
+    *Starts the Express socket.io backend, initiates SQLite/JSON databases, starts UDP LAN discovery beacons, and serves compiled static files from `/out` on `http://localhost:3000`.*
+*   **Run Next.js Website in Dev Mode**:
+    ```bash
+    npm run web:dev
     ```
 
-4.  **Confirm Launch**:
-    Upon running, the server will output your primary LAN access address (e.g., `http://192.168.1.100:3000`) and boot up the SQLite chat database under `database/chat.db` seamlessly.
+#### Desktop Application Operations (Electron Client)
+*   **Launch the Electron app in developer hot-reload mode**:
+    ```bash
+    npm run electron:start
+    ```
+    *Spawns backend server threads, automatically maps sqlite tables to AppData paths, and launches the Electron BrowserWindow window.*
+*   **Package and compile standalone desktop installers**:
+    ```bash
+    npm run electron:dist
+    ```
+    *Compiles native desktop setups inside the `/dist` directory (`.exe` for Windows, `.dmg` for macOS, `.AppImage` for Linux).*
 
-### ☁️ Hosting & Cloud Deployment
+---
+
+## ☁️ Hosting & Cloud Deployment
 
 FileShareX is architected as a **stateful, high-performance, real-time Node.js application**. It relies on persistent WebSocket connections for chat syncing, active voice/video WebRTC coordination, and drawing board updates, combined with a local SQLite database (`database/chat.db`) and a dynamic filesystem workspace (`uploads/`) for handling large E2EE chunked uploads.
 
-Because of this stateful architecture, **FileShareX cannot be hosted on Vercel or similar purely serverless hosting platforms**.
+Because of this stateful architecture, **the backend chat server cannot be hosted on Vercel or similar purely serverless hosting platforms**. However, the **marketing website** under `/out` is fully compatible and is built to be hosted on **Vercel** statically!
 
-#### 🚫 Why Vercel is Not Supported
-
-Vercel is designed for static websites and stateless serverless functions (like AWS Lambda). Attempting to deploy FileShareX on Vercel faces the following absolute barriers:
+#### 🚫 Why Vercel Backend Hosting is Not Supported
+Vercel is designed for static websites and stateless serverless functions (like AWS Lambda). Attempting to deploy the FileShareX Socket.IO backend on Vercel faces the following absolute barriers:
 1. **No Persistent WebSocket Connections**: Vercel Serverless Functions have a strict execution timeout (usually 10 to 60 seconds). Once a function finishes returning an HTTP response, its execution context is frozen. Real-time, continuous bidirectional TCP/WebSocket connections via `Socket.IO` are impossible.
 2. **Ephemeral and Read-Only Filesystem**: The container environment on Vercel is read-only (except `/tmp`). The SQLite database (`database/chat.db`) will fail when attempting to write chat logs or folders. Any uploaded files under `uploads/` will be completely wiped out the moment the serverless container recycles or scales down.
 3. **No UDP Socket Broadcasting**: Vercel does not support raw UDP socket binding (`dgram` module), which is required to broadcast LAN auto-discovery beacons on port `41234`.

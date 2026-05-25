@@ -7,7 +7,10 @@
     "start": "node server.js",
     "electron:start": "electron .",
     "electron:pack": "electron-builder --dir",
-    "electron:dist": "electron-builder"
+    "electron:dist": "electron-builder",
+    "web:dev": "next dev",
+    "web:build": "next build",
+    "web:start": "next start"
   },
   "keywords": [
     "lan",
@@ -22,7 +25,10 @@
   "dependencies": {
     "express": "^4.19.2",
     "multer": "^1.4.5-lts.1",
+    "next": "^14.2.3",
     "qrcode": "^1.5.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "socket.io": "^4.7.5",
     "sqlite3": "^5.1.7"
   },
@@ -44,7 +50,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "electron/renderer/logo.ico"
+      "icon": "electron/renderer/logo.png"
     },
     "mac": {
       "target": "dmg",
