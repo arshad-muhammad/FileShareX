@@ -2,9 +2,12 @@
   "name": "filesharex",
   "version": "1.0.0",
   "description": "Premium LAN Chat and File Sharing Web Application",
-  "main": "server.js",
+  "main": "electron/main.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "electron:start": "electron .",
+    "electron:pack": "electron-builder --dir",
+    "electron:dist": "electron-builder"
   },
   "keywords": [
     "lan",
@@ -22,5 +25,36 @@
     "qrcode": "^1.5.3",
     "socket.io": "^4.7.5",
     "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "electron": "^41.7.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.filesharex.app",
+    "productName": "FileShareX",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "server.js",
+      "db.js",
+      "public/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/renderer/logo.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "electron/renderer/logo.png",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Network",
+      "icon": "electron/renderer/logo.png"
+    }
   }
 }

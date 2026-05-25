@@ -42,9 +42,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// Route to serve the app dashboard
+// Route to serve the app dashboard - redirected to root marketing page inside desktop flow
 app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+  res.redirect('/');
 });
 
 // Use memory storage — req.body fields are fully available after multer buffers the request,

@@ -2,6 +2,12 @@
 // FileShareX - Client Side Application Core
 // ==========================================================================
 
+// Electron backend URL resolver helper
+function getApiUrl(path) {
+  const base = window.api ? window.api.getServerUrl() : '';
+  return `${base}${path}`;
+}
+
 const CHUNK_SIZE = 1024 * 1024; // 1 MB chunks
 let socket = null;
 
@@ -327,7 +333,8 @@ async function decryptCombinedFile(encryptedBuffer, key, originalSize, isFallbac
 }
 
 async function getDecryptedBlobUrl(url, fileType, originalSize, isFallbackFile = false) {
-  const res = await fetch(url);
+  const fetchUrl = url.startsWith('/') ? getApiUrl(url) : url;
+  const res = await fetch(fetchUrl);
   const encryptedArrayBuffer = await res.arrayBuffer();
   const decryptedBuffer = await decryptCombinedFile(encryptedArrayBuffer, state.currentChannelKey, originalSize, isFallbackFile);
   const blob = new Blob([decryptedBuffer], { type: fileType });
@@ -860,7 +867,8 @@ function initApp() {
 }
 
 function setupSocket() {
-  socket = io({
+  const serverUrl = window.api ? window.api.getServerUrl() : '';
+  socket = io(serverUrl, {
     autoConnect: false,
     reconnection: true,
     reconnectionDelay: 1000,
@@ -1115,7 +1123,7 @@ function setupSocket() {
 // Fetch network details from API (primary LAN IP and QR code link)
 async function fetchNetworkInfo() {
   try {
-    const res = await fetch('/api/info');
+    const res = await fetch(getApiUrl('/api/info'));
     const data = await res.json();
     
     if (data.isCloud) {
@@ -1701,7 +1709,7 @@ async function runChunkedUpload(uploadId) {
 
   try {
     // 1. Ask Server if any chunks are already uploaded (Supports seamless resumes!)
-    const statusRes = await fetch(`/api/upload/status?uploadId=${uploadId}`);
+    const statusRes = await fetch(getApiUrl(`/api/upload/status?uploadId=${uploadId}`));
     const statusData = await statusRes.json();
     task.uploadedChunks = statusData.uploadedChunks || [];
     
@@ -1769,7 +1777,7 @@ async function runChunkedUpload(uploadId) {
       formData.append('fileName', task.fileName);
 
       // Perform Fetch Upload Chunk
-      const chunkRes = await fetch('/api/upload/chunk', {
+      const chunkRes = await fetch(getApiUrl('/api/upload/chunk'), {
         method: 'POST',
         body: formData,
         signal: task.controller.signal
@@ -1806,7 +1814,7 @@ async function runChunkedUpload(uploadId) {
         }
       }
 
-      const completeRes = await fetch('/api/upload/complete', {
+      const completeRes = await fetch(getApiUrl('/api/upload/complete'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -2035,7 +2043,7 @@ async function handleFileDownloadClick(e, url, fileName, fileType, originalSize,
     await downloadAndDecryptFile(url, fileName, fileType, originalSize, isFallbackFile);
   } else {
     const a = document.createElement('a');
-    a.href = url;
+    a.href = url.startsWith('/') ? getApiUrl(url) : url;
     a.download = fileName;
     document.body.appendChild(a);
     a.click();
@@ -2525,7 +2533,7 @@ function setupEventListeners() {
     if (!folderName || !folderName.trim()) return;
 
     try {
-      const res = await fetch('/api/drive/folder', {
+      const res = await fetch(getApiUrl('/api/drive/folder'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3235,7 +3243,7 @@ function closeP2PToast() {
 // ==========================================================================
 async function pollLanAutoDiscovery() {
   try {
-    const res = await fetch('/api/discover');
+    const res = await fetch(getApiUrl('/api/discover'));
     if (!res.ok) return;
     const nodes = await res.json();
 
@@ -3245,19 +3253,21 @@ async function pollLanAutoDiscovery() {
       let nodeRenderCount = 0;
       
       nodes.forEach(node => {
-        // Exclude our own node if the local username matches
-        const isSelf = node.username === state.username;
+        // Exclude our own node if the local IP matches
+        const isSelf = node.ip === state.ip;
         if (isSelf) return;
 
         nodeRenderCount++;
         const card = document.createElement('div');
         card.className = 'discovered-node-card';
+        const nodeName = node.name || 'FileShareX Peer';
+        const nodeUrl = node.url || `http://${node.ip}:${node.port || 3000}`;
         card.innerHTML = `
           <div class="discovered-node-info">
-            <span class="discovered-node-username">${escapeHTML(node.username)}</span>
-            <span class="discovered-node-ip">http://${node.ip}:${node.port}</span>
+            <span class="discovered-node-username">${escapeHTML(nodeName)}</span>
+            <span class="discovered-node-ip">${escapeHTML(nodeUrl)}</span>
           </div>
-          <a href="http://${node.ip}:${node.port}" target="_blank" class="discovered-node-connect-btn">Connect</a>
+          <a href="${escapeHTML(nodeUrl)}" target="_blank" class="discovered-node-connect-btn">Connect</a>
         `;
         DOM.discoveredNodesList.appendChild(card);
       });
@@ -3400,7 +3410,7 @@ function clearLocalCanvasOnly() {
 async function loadNasDirectory() {
   const folderId = state.nasCurrentFolderId;
   try {
-    const res = await fetch(`/api/drive?room=${encodeURIComponent(state.currentChannel)}&parent=${encodeURIComponent(folderId)}`);
+    const res = await fetch(getApiUrl(`/api/drive?room=${encodeURIComponent(state.currentChannel)}&parent=${encodeURIComponent(folderId)}`));
     const items = await res.json();
 
     renderNasBreadcrumbs();
@@ -3518,7 +3528,7 @@ async function loadNasDirectory() {
           if (!(await showCustomConfirm('Delete Item', confirmMsg, 'danger'))) return;
 
           try {
-            const res = await fetch(`/api/drive?id=${encodeURIComponent(item.id)}&room=${encodeURIComponent(state.currentChannel)}`, {
+            const res = await fetch(getApiUrl(`/api/drive?id=${encodeURIComponent(item.id)}&room=${encodeURIComponent(state.currentChannel)}`), {
               method: 'DELETE'
             });
             const data = await res.json();

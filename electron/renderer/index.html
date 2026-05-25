@@ -17,14 +17,14 @@
     <aside id="sidebar" class="sidebar">
       <!-- Sidebar Header -->
       <div class="sidebar-header">
-        <a href="/" class="brand" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit;">
+        <div class="brand" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; cursor: default;">
           <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
             <path d="M12 12v9" />
             <path d="m8 17 4 4 4-4" />
           </svg>
           <span class="brand-name">FileShareX</span>
-        </a>
+        </div>
         <button id="sidebar-close" class="mobile-only-btn" aria-label="Close sidebar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -684,8 +684,8 @@
     </div>
   </div>
 
-  <!-- Client Socket.IO Library -->
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Offline-first Local Socket.IO Library -->
+  <script src="./socket.io.js"></script>
   <!-- Client JS Application -->
   <script src="app.js"></script>
 </body>
