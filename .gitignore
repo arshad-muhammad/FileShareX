@@ -33,3 +33,4 @@ release/
 # Next.js build and static export folders
 .next/
 out/
+.vercel

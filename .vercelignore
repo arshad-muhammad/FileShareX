@@ -1,0 +1,14 @@
+# Exclude large local development and desktop assets from Vercel
+node_modules/
+.next/
+out/
+dist/
+dist-*
+release/
+uploads/
+database/
+electron/
+server.js
+db.js
+*.log
+.git/
