@@ -24,3 +24,8 @@ Thumbs.db
 .env.local
 .idea
 database/chat.json
+
+# Electron build directory
+dist/
+dist-*
+release/
