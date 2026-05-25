@@ -676,6 +676,9 @@ io.on('connection', (socket) => {
       targetChannel = `${targetChannel}_${user.networkId}`;
     }
 
+    // Await default room registration to avoid any race conditions!
+    await registerDefaultRoomsForNetwork(user.networkId);
+
     const room = rooms.get(targetChannel);
     if (!room) {
       if (callback) callback({ error: 'Room does not exist' });
