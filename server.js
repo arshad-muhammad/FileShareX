@@ -117,41 +117,95 @@ function getUniqueFilename(originalName) {
 // ============================================================
 // Room Registry (in-memory, persists while server is running)
 // ============================================================
-// Map of roomId -> { name, displayName, hasPassword, passwordHash, createdBy, createdAt, memberCount }
+// Map of roomId -> { name, displayName, hasPassword, passwordHash, createdBy, createdAt, memberCount, networkId }
 const rooms = new Map();
 
-// Default built-in rooms (no password)
-const DEFAULT_ROOMS = [
-  { id: '#general',      displayName: 'general',      hasPassword: false },
-  { id: '#shared-files', displayName: 'shared-files', hasPassword: false },
-  { id: '#random',       displayName: 'random',       hasPassword: false },
-];
+function getNetworkIdentifier(ip) {
+  if (!ip) return 'unknown-network';
+  
+  let cleanIp = ip;
+  if (cleanIp.startsWith('::ffff:')) {
+    cleanIp = cleanIp.substring(7);
+  } else if (cleanIp === '::1') {
+    cleanIp = '127.0.0.1';
+  }
 
-DEFAULT_ROOMS.forEach(r => {
-  rooms.set(r.id, {
-    id: r.id,
-    displayName: r.displayName,
-    hasPassword: false,
-    passwordHash: null,
-    createdBy: 'system',
-    createdAt: Date.now(),
-    isDefault: true,
-  });
-});
+  if (cleanIp === '127.0.0.1' || cleanIp === 'localhost') {
+    return 'local-loopback';
+  }
+
+  const isPrivateIPv4 = (
+    cleanIp.startsWith('192.168.') ||
+    cleanIp.startsWith('10.') ||
+    (cleanIp.startsWith('172.') && parseInt(cleanIp.split('.')[1], 10) >= 16 && parseInt(cleanIp.split('.')[1], 10) <= 31)
+  );
+
+  if (isPrivateIPv4) {
+    const parts = cleanIp.split('.');
+    if (parts.length >= 3) {
+      return `local-subnet-${parts[0]}.${parts[1]}.${parts[2]}`;
+    }
+  }
+
+  return `wan-ip-${cleanIp}`;
+}
+
+function getClientIp(req) {
+  let ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.connection?.remoteAddress || '';
+  if (ip && ip.includes(',')) {
+    ip = ip.split(',')[0].trim();
+  }
+  return ip;
+}
+
+async function registerDefaultRoomsForNetwork(networkId) {
+  const defaults = [
+    { id: `#general_${networkId}`,      displayName: 'general',      hasPassword: false },
+    { id: `#shared-files_${networkId}`, displayName: 'shared-files', hasPassword: false },
+    { id: `#random_${networkId}`,       displayName: 'random',       hasPassword: false },
+  ];
+
+  for (const r of defaults) {
+    if (!rooms.has(r.id)) {
+      const roomData = {
+        id: r.id,
+        displayName: r.displayName,
+        hasPassword: false,
+        passwordHash: null,
+        createdBy: 'system',
+        createdAt: Date.now(),
+        isDefault: true,
+        networkId: networkId
+      };
+      rooms.set(r.id, roomData);
+      try {
+        await db.saveRoom(roomData);
+      } catch (err) {
+        console.error(`Failed to persist default room ${r.id}:`, err);
+      }
+    }
+  }
+}
 
 function hashPassword(pwd) {
   return crypto.createHash('sha256').update(pwd + 'filesharex-salt').digest('hex');
 }
 
-function getRoomList() {
-  return Array.from(rooms.values()).map(r => ({
-    id: r.id,
-    displayName: r.displayName,
-    hasPassword: r.hasPassword,
-    createdBy: r.createdBy,
-    createdAt: r.createdAt,
-    isDefault: r.isDefault || false,
-  }));
+function getRoomList(networkId) {
+  const list = [];
+  rooms.forEach(r => {
+    if (r.networkId === networkId) {
+      list.push({
+        id: r.id,
+        displayName: r.displayName,
+        hasPassword: r.hasPassword,
+        createdBy: r.createdBy,
+        createdAt: r.createdAt,
+        isDefault: r.isDefault || false,
+      });
+    }
+  });
+  return list;
 }
 
 // ----------------------------------------
@@ -176,25 +230,32 @@ app.get('/api/info', (req, res) => {
 });
 
 // List all rooms
-app.get('/api/rooms', (req, res) => {
-  res.json(getRoomList());
+app.get('/api/rooms', async (req, res) => {
+  const clientIp = getClientIp(req);
+  const networkId = getNetworkIdentifier(clientIp);
+  await registerDefaultRoomsForNetwork(networkId);
+  res.json(getRoomList(networkId));
 });
 
 // Create a room via REST (also callable from socket)
-app.post('/api/rooms', (req, res) => {
+app.post('/api/rooms', async (req, res) => {
   const { name, password, createdBy } = req.body;
 
   if (!name) return res.status(400).json({ error: 'Room name is required' });
 
+  const clientIp = getClientIp(req);
+  const networkId = getNetworkIdentifier(clientIp);
+  await registerDefaultRoomsForNetwork(networkId);
+
   const clean = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').substring(0, 32);
-  const id = `#${clean}`;
+  const id = `#${clean}_${networkId}`;
 
   if (rooms.has(id)) {
     return res.status(409).json({ error: 'A room with that name already exists' });
   }
 
   const hasPassword = !!(password && password.trim());
-  rooms.set(id, {
+  const newRoom = {
     id,
     displayName: clean,
     hasPassword,
@@ -202,10 +263,25 @@ app.post('/api/rooms', (req, res) => {
     createdBy: createdBy || 'unknown',
     createdAt: Date.now(),
     isDefault: false,
-  });
+    networkId
+  };
 
-  // Broadcast room list update to all clients
-  io.emit('room-list-update', getRoomList());
+  rooms.set(id, newRoom);
+  try {
+    await db.saveRoom(newRoom);
+  } catch (dbErr) {
+    console.error('Failed to save room to database:', dbErr);
+  }
+
+  // Broadcast room list update to all clients on this network
+  onlineUsers.forEach((user, socketId) => {
+    if (user.networkId === networkId) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('room-list-update', getRoomList(networkId));
+      }
+    }
+  });
 
   res.json({ success: true, room: { id, displayName: clean, hasPassword } });
 });
@@ -252,8 +328,16 @@ app.get('/api/discover', (req, res) => {
 app.get('/api/drive', async (req, res) => {
   const { room, parent } = req.query;
   if (!room) return res.status(400).json({ error: 'Missing room parameter' });
+
+  const clientIp = getClientIp(req);
+  const networkId = getNetworkIdentifier(clientIp);
+  let targetRoom = room;
+  if (!targetRoom.endsWith(`_${networkId}`)) {
+    targetRoom = `${targetRoom}_${networkId}`;
+  }
+
   try {
-    const files = await db.getDriveFiles(room, parent || 'root');
+    const files = await db.getDriveFiles(targetRoom, parent || 'root');
     res.json(files);
   } catch (err) {
     console.error('Error fetching drive files:', err);
@@ -267,6 +351,14 @@ app.post('/api/drive/folder', async (req, res) => {
   if (!room || !folderName || !username) {
     return res.status(400).json({ error: 'Missing required parameters' });
   }
+
+  const clientIp = getClientIp(req);
+  const networkId = getNetworkIdentifier(clientIp);
+  let targetRoom = room;
+  if (!targetRoom.endsWith(`_${networkId}`)) {
+    targetRoom = `${targetRoom}_${networkId}`;
+  }
+
   try {
     const folderItem = {
       filename: folderName,
@@ -277,12 +369,12 @@ app.post('/api/drive/folder', async (req, res) => {
       parent_folder_id: parent || 'root',
       created_by: username,
       timestamp: Date.now(),
-      room_id: room
+      room_id: targetRoom
     };
     const saved = await db.saveDriveFile(folderItem);
     
     // Notify room of update
-    io.to(room).emit('drive-updated', { roomId: room });
+    io.to(targetRoom).emit('drive-updated', { roomId: targetRoom });
     
     res.json({ success: true, folder: saved });
   } catch (err) {
@@ -295,11 +387,19 @@ app.post('/api/drive/folder', async (req, res) => {
 app.delete('/api/drive', async (req, res) => {
   const { id, room } = req.query;
   if (!id || !room) return res.status(400).json({ error: 'Missing id or room parameter' });
+
+  const clientIp = getClientIp(req);
+  const networkId = getNetworkIdentifier(clientIp);
+  let targetRoom = room;
+  if (!targetRoom.endsWith(`_${networkId}`)) {
+    targetRoom = `${targetRoom}_${networkId}`;
+  }
+
   try {
     await db.deleteDriveFile(id);
     
     // Notify room of update
-    io.to(room).emit('drive-updated', { roomId: room });
+    io.to(targetRoom).emit('drive-updated', { roomId: targetRoom });
     
     res.json({ success: true });
   } catch (err) {
@@ -454,6 +554,13 @@ app.post('/api/upload/complete', async (req, res) => {
     // Store in Database
     const fileUrl = `/uploads/${encodeURIComponent(safeFileName)}`;
     
+    const clientIp = getClientIp(req);
+    const networkId = getNetworkIdentifier(clientIp);
+    let targetChannel = channel;
+    if (!targetChannel.endsWith(`_${networkId}`)) {
+      targetChannel = `${targetChannel}_${networkId}`;
+    }
+
     if (req.body.isDriveFile === 'true' || req.body.isDriveFile === true) {
       const driveFile = {
         filename: fileName,
@@ -464,11 +571,11 @@ app.post('/api/upload/complete', async (req, res) => {
         parent_folder_id: req.body.parentFolderId || 'root',
         created_by: username,
         timestamp: Date.now(),
-        room_id: channel
+        room_id: targetChannel
       };
       
       const savedDriveItem = await db.saveDriveFile(driveFile);
-      io.to(channel).emit('drive-updated', { roomId: channel });
+      io.to(targetChannel).emit('drive-updated', { roomId: targetChannel });
       
       return res.json({
         success: true,
@@ -486,13 +593,13 @@ app.post('/api/upload/complete', async (req, res) => {
       fileSize: parseInt(fileSize, 10),
       fileType,
       timestamp: Date.now(),
-      channel
+      channel: targetChannel
     };
 
     const savedMsg = await db.saveMessage(dbMessage);
 
     // Broadcast file sharing event via Socket.IO
-    io.to(channel).emit('message', savedMsg);
+    io.to(targetChannel).emit('message', savedMsg);
 
     res.json({
       success: true,
@@ -510,7 +617,7 @@ app.post('/api/upload/complete', async (req, res) => {
 // Socket.IO Real-time Channels
 // ----------------------------------------
 
-const onlineUsers = new Map(); // socket.id -> { username, currentChannel, color, ip }
+const onlineUsers = new Map(); // socket.id -> { username, currentChannel, color, ip, networkId }
 
 function getOnlineUsersList(channel) {
   const users = [];
@@ -533,6 +640,8 @@ io.on('connection', (socket) => {
 
   console.log(`Socket connected: ${socket.id} (IP: ${rawIp})`);
 
+  const networkId = getNetworkIdentifier(rawIp);
+
   // Assign user profile properties
   const userColors = [
     '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
@@ -542,13 +651,16 @@ io.on('connection', (socket) => {
   
   onlineUsers.set(socket.id, {
     username: 'Guest_' + socket.id.substring(0, 4),
-    currentChannel: '#general',
+    currentChannel: `#general_${networkId}`,
     color: randomColor,
-    ip: rawIp
+    ip: rawIp,
+    networkId: networkId
   });
 
-  // Send current room list on connect
-  socket.emit('room-list-update', getRoomList());
+  // Ensure default rooms are registered and send room list
+  registerDefaultRoomsForNetwork(networkId).then(() => {
+    socket.emit('room-list-update', getRoomList(networkId));
+  });
 
   // Handle Client Initial Join
   socket.on('join-channel', async (channelName, password, callback) => {
@@ -559,7 +671,12 @@ io.on('connection', (socket) => {
     if (typeof password === 'function') { callback = password; password = null; }
     if (typeof callback !== 'function') callback = null;
 
-    const room = rooms.get(channelName);
+    let targetChannel = channelName;
+    if (!targetChannel.endsWith(`_${user.networkId}`)) {
+      targetChannel = `${targetChannel}_${user.networkId}`;
+    }
+
+    const room = rooms.get(targetChannel);
     if (!room) {
       if (callback) callback({ error: 'Room does not exist' });
       return;
@@ -581,12 +698,12 @@ io.on('connection', (socket) => {
     socket.leave(oldChannel);
     
     // Join new channel
-    socket.join(channelName);
-    user.currentChannel = channelName;
+    socket.join(targetChannel);
+    user.currentChannel = targetChannel;
 
     // Send history of the channel
     try {
-      const history = await db.getMessages(channelName, 100);
+      const history = await db.getMessages(targetChannel, 100);
       socket.emit('message-history', history);
     } catch (err) {
       console.error('Error fetching chat history:', err);
@@ -594,10 +711,10 @@ io.on('connection', (socket) => {
 
     // Broadcast updated user lists
     io.to(oldChannel).emit('user-list-update', getOnlineUsersList(oldChannel));
-    io.to(channelName).emit('user-list-update', getOnlineUsersList(channelName));
+    io.to(targetChannel).emit('user-list-update', getOnlineUsersList(targetChannel));
 
     // Send system announcement
-    socket.to(channelName).emit('system-notification', {
+    socket.to(targetChannel).emit('system-notification', {
       message: `${user.username} joined the channel.`,
       timestamp: Date.now()
     });
@@ -606,12 +723,15 @@ io.on('connection', (socket) => {
   });
 
   // Handle Room Creation via socket
-  socket.on('create-room', ({ name, password }, callback) => {
+  socket.on('create-room', async ({ name, password }, callback) => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
 
+    const networkId = user.networkId;
+    await registerDefaultRoomsForNetwork(networkId);
+
     const clean = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').substring(0, 32);
-    const id = `#${clean}`;
+    const id = `#${clean}_${networkId}`;
 
     if (rooms.has(id)) {
       if (callback) callback({ error: 'A room with that name already exists' });
@@ -619,7 +739,7 @@ io.on('connection', (socket) => {
     }
 
     const hasPassword = !!(password && password.trim());
-    rooms.set(id, {
+    const newRoom = {
       id,
       displayName: clean,
       hasPassword,
@@ -627,10 +747,25 @@ io.on('connection', (socket) => {
       createdBy: user.username,
       createdAt: Date.now(),
       isDefault: false,
-    });
+      networkId
+    };
 
-    // Broadcast updated room list to all clients
-    io.emit('room-list-update', getRoomList());
+    rooms.set(id, newRoom);
+    try {
+      await db.saveRoom(newRoom);
+    } catch (dbErr) {
+      console.error('Failed to save room to database:', dbErr);
+    }
+
+    // Broadcast updated room list to all clients on this network
+    onlineUsers.forEach((u, socketId) => {
+      if (u.networkId === networkId) {
+        const s = io.sockets.sockets.get(socketId);
+        if (s) {
+          s.emit('room-list-update', getRoomList(networkId));
+        }
+      }
+    });
 
     if (callback) callback({ success: true, roomId: id });
   });
@@ -711,19 +846,34 @@ io.on('connection', (socket) => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
 
-    const room = rooms.get(roomId);
+    let targetRoom = roomId;
+    if (!targetRoom.endsWith(`_${user.networkId}`)) {
+      targetRoom = `${targetRoom}_${user.networkId}`;
+    }
+
+    const room = rooms.get(targetRoom);
     if (!room) return;
     if (room.isDefault) return; // protect built-in rooms
     if (room.createdBy !== user.username) return; // only creator can delete
 
-    rooms.delete(roomId);
+    rooms.delete(targetRoom);
+    
+    db.deleteRoom(targetRoom).catch(err => {
+      console.error('Failed to delete room from database:', err);
+    });
 
-    // Notify all clients so they can move out of the deleted room
-    io.emit('room-deleted', { roomId });
-    // Send updated room list
-    io.emit('room-list-update', getRoomList());
+    // Notify all clients on this network so they can move out of the deleted room
+    onlineUsers.forEach((u, socketId) => {
+      if (u.networkId === user.networkId) {
+        const s = io.sockets.sockets.get(socketId);
+        if (s) {
+          s.emit('room-deleted', { roomId: targetRoom });
+          s.emit('room-list-update', getRoomList(user.networkId));
+        }
+      }
+    });
 
-    console.log(`Room ${roomId} deleted by ${user.username}`);
+    console.log(`Room ${targetRoom} deleted by ${user.username}`);
   });
 
   // Handle Typing Status updates
@@ -745,14 +895,26 @@ io.on('connection', (socket) => {
   socket.on('join-call', (channelName) => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
-    socket.to(channelName).emit('user-joined-call', {
+    
+    let targetChannel = channelName;
+    if (!targetChannel.endsWith(`_${user.networkId}`)) {
+      targetChannel = `${targetChannel}_${user.networkId}`;
+    }
+
+    socket.to(targetChannel).emit('user-joined-call', {
       socketId: socket.id,
       username: user.username
     });
   });
 
   socket.on('leave-call', (channelName) => {
-    socket.to(channelName).emit('user-left-call', { socketId: socket.id });
+    const user = onlineUsers.get(socket.id);
+    const networkId = user ? user.networkId : '';
+    let targetChannel = channelName;
+    if (networkId && !targetChannel.endsWith(`_${networkId}`)) {
+      targetChannel = `${targetChannel}_${networkId}`;
+    }
+    socket.to(targetChannel).emit('user-left-call', { socketId: socket.id });
   });
 
   // --- P2P Direct File Transfer Signaling ---
@@ -905,7 +1067,17 @@ io.on('connection', (socket) => {
 });
 
 // Initialize database and boot up the server
-db.init().then(() => {
+db.init().then(async () => {
+  try {
+    const dbRooms = await db.getAllRooms();
+    dbRooms.forEach(r => {
+      rooms.set(r.id, r);
+    });
+    console.log(`Loaded ${dbRooms.length} rooms from database.`);
+  } catch (err) {
+    console.error('Failed to load rooms from database:', err);
+  }
+
   server.listen(PORT, '0.0.0.0', () => {
     console.log('\n======================================================');
     console.log('             FILESHAREX SERVER SUCCESSFULLY LAUNCHED');

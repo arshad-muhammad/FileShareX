@@ -6,6 +6,7 @@ const DB_DIR = path.join(PERSISTENT_DIR, 'database');
 const SQLITE_PATH = path.join(DB_DIR, 'chat.db');
 const JSON_PATH = path.join(DB_DIR, 'chat.json');
 const DRIVE_JSON_PATH = path.join(DB_DIR, 'drive.json');
+const ROOMS_JSON_PATH = path.join(DB_DIR, 'rooms.json');
 
 // Ensure database directory exists
 if (!fs.existsSync(DB_DIR)) {
@@ -16,6 +17,7 @@ let dbInstance = null;
 let useJsonFallback = false;
 let jsonDbData = [];
 let jsonDriveData = [];
+let jsonRoomsData = [];
 
 // SQLite implementation
 class SQLiteDB {
@@ -64,7 +66,24 @@ class SQLiteDB {
           
           this.db.run(createDriveTable, (err) => {
             if (err) return reject(err);
-            resolve();
+            
+            const createRoomsTable = `
+              CREATE TABLE IF NOT EXISTS rooms (
+                id TEXT PRIMARY KEY,
+                displayName TEXT NOT NULL,
+                hasPassword INTEGER DEFAULT 0,
+                passwordHash TEXT,
+                createdBy TEXT NOT NULL,
+                createdAt INTEGER NOT NULL,
+                isDefault INTEGER DEFAULT 0,
+                networkId TEXT NOT NULL
+              )
+            `;
+            
+            this.db.run(createRoomsTable, (err) => {
+              if (err) return reject(err);
+              resolve();
+            });
           });
         });
       });
@@ -205,6 +224,61 @@ class SQLiteDB {
       });
     });
   }
+
+  saveRoom(room) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT OR REPLACE INTO rooms (id, displayName, hasPassword, passwordHash, createdBy, createdAt, isDefault, networkId)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      this.db.run(
+        query,
+        [
+          room.id,
+          room.displayName,
+          room.hasPassword ? 1 : 0,
+          room.passwordHash || null,
+          room.createdBy,
+          room.createdAt,
+          room.isDefault ? 1 : 0,
+          room.networkId
+        ],
+        function (err) {
+          if (err) return reject(err);
+          resolve(room);
+        }
+      );
+    });
+  }
+
+  getAllRooms() {
+    return new Promise((resolve, reject) => {
+      const query = `SELECT * FROM rooms`;
+      this.db.all(query, [], (err, rows) => {
+        if (err) return reject(err);
+        const formatted = rows.map(r => ({
+          id: r.id,
+          displayName: r.displayName,
+          hasPassword: !!r.hasPassword,
+          passwordHash: r.passwordHash,
+          createdBy: r.createdBy,
+          createdAt: r.createdAt,
+          isDefault: !!r.isDefault,
+          networkId: r.networkId
+        }));
+        resolve(formatted);
+      });
+    });
+  }
+
+  deleteRoom(id) {
+    return new Promise((resolve, reject) => {
+      this.db.run('DELETE FROM rooms WHERE id = ?', [id], (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+  }
 }
 
 // JSON Fallback implementation (extremely robust, doesn't require native modules)
@@ -235,6 +309,19 @@ const jsonDB = {
       } catch (err) {
         console.error('Error loading JSON drive database, resetting in-memory:', err);
         jsonDriveData = [];
+      }
+
+      try {
+        if (fs.existsSync(ROOMS_JSON_PATH)) {
+          const raw = fs.readFileSync(ROOMS_JSON_PATH, 'utf8');
+          jsonRoomsData = JSON.parse(raw);
+        } else {
+          jsonRoomsData = [];
+          fs.writeFileSync(ROOMS_JSON_PATH, JSON.stringify(jsonRoomsData, null, 2), 'utf8');
+        }
+      } catch (err) {
+        console.error('Error loading JSON rooms database, resetting in-memory:', err);
+        jsonRoomsData = [];
       }
       resolve();
     });
@@ -355,6 +442,46 @@ const jsonDB = {
         reject(err);
       }
     });
+  },
+
+  saveRoom(room) {
+    return new Promise((resolve, reject) => {
+      const idx = jsonRoomsData.findIndex(r => r.id === room.id);
+      if (idx !== -1) {
+        jsonRoomsData[idx] = room;
+      } else {
+        jsonRoomsData.push(room);
+      }
+      try {
+        const tempPath = ROOMS_JSON_PATH + '.tmp';
+        fs.writeFileSync(tempPath, JSON.stringify(jsonRoomsData, null, 2), 'utf8');
+        fs.renameSync(tempPath, ROOMS_JSON_PATH);
+        resolve(room);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  },
+
+  getAllRooms() {
+    return new Promise((resolve) => {
+      resolve(jsonRoomsData);
+    });
+  },
+
+  deleteRoom(id) {
+    return new Promise((resolve, reject) => {
+      const idx = jsonRoomsData.findIndex(r => r.id === id);
+      if (idx !== -1) jsonRoomsData.splice(idx, 1);
+      try {
+        const tempPath = ROOMS_JSON_PATH + '.tmp';
+        fs.writeFileSync(tempPath, JSON.stringify(jsonRoomsData, null, 2), 'utf8');
+        fs.renameSync(tempPath, ROOMS_JSON_PATH);
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
 };
 
@@ -419,5 +546,20 @@ module.exports = {
   async deleteDriveFile(id) {
     if (!dbInstance) throw new Error('Database not initialized');
     return dbInstance.deleteDriveFile(id);
+  },
+
+  async saveRoom(room) {
+    if (!dbInstance) throw new Error('Database not initialized');
+    return dbInstance.saveRoom(room);
+  },
+
+  async getAllRooms() {
+    if (!dbInstance) throw new Error('Database not initialized');
+    return dbInstance.getAllRooms();
+  },
+
+  async deleteRoom(id) {
+    if (!dbInstance) throw new Error('Database not initialized');
+    return dbInstance.deleteRoom(id);
   }
 };
