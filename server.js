@@ -39,7 +39,7 @@ if (!fs.existsSync(TMP_DIR)) {
 // Express Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'out')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Route to serve the app dashboard - redirected to root marketing page inside desktop flow

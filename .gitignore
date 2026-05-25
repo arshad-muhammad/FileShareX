@@ -29,3 +29,7 @@ database/chat.json
 dist/
 dist-*
 release/
+
+# Next.js build and static export folders
+.next/
+out/

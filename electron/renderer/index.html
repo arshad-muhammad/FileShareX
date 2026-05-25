@@ -319,7 +319,7 @@
   <!-- ========================================== -->
 
   <!-- 1. Username Selector Modal -->
-  <div id="username-modal" class="modal-overlay active">
+  <div id="username-modal" class="modal-overlay">
     <div class="modal-card select-user-card animate-scale">
       <div class="brand-large">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -350,6 +350,219 @@
           <!-- Discovered network nodes will be populated by JS -->
         </ul>
       </div>
+    </div>
+  </div>
+
+  <!-- First-Time Onboarding / Setup Modal -->
+  <div id="setup-modal" class="modal-overlay">
+    <div class="modal-card setup-card animate-scale">
+      
+      <!-- Progress Bar / Indicator Dots -->
+      <div class="setup-progress">
+        <div class="progress-bar-fill" style="width: 25%"></div>
+        <div class="progress-dots">
+          <span class="progress-dot active" data-slide="1"></span>
+          <span class="progress-dot" data-slide="2"></span>
+          <span class="progress-dot" data-slide="3"></span>
+          <span class="progress-dot" data-slide="4"></span>
+        </div>
+      </div>
+
+      <!-- Slide Wrapper -->
+      <div class="setup-slides-container">
+        
+        <!-- Slide 1: Welcome -->
+        <div class="setup-slide active" data-slide="1">
+          <div class="setup-welcome-logo animate-spring">
+            <img src="logo.png" alt="FileShareX Logo">
+          </div>
+          <h2>Welcome to FileShareX</h2>
+          <p class="subtitle">The premium, ultra-secure, local-first sharing and collaborative workspace.</p>
+          <div class="setup-features-mini-list">
+            <div class="mini-feature-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="mini-icon">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
+              <span>100% Free &amp; Offline-First</span>
+            </div>
+            <div class="mini-feature-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="mini-icon">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <span>Zero Knowledge Security</span>
+            </div>
+          </div>
+          <div class="setup-actions">
+            <button class="primary-btn setup-next-btn">Get Started</button>
+          </div>
+        </div>
+
+        <!-- Slide 2: Carousel of Premium Features -->
+        <div class="setup-slide" data-slide="2">
+          <h2>Discover Premium Features</h2>
+          <p class="subtitle">A full-featured workspace right in your local network.</p>
+          
+          <div class="setup-carousel">
+            <!-- Carousel Slides -->
+            <div class="carousel-track">
+              <!-- Slide 2A -->
+              <div class="carousel-slide active" data-carousel="0">
+                <div class="feature-illustration">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feature-main-icon text-neon-blue">
+                    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+                    <path d="M12 12v9" />
+                    <path d="m8 17 4 4 4-4" />
+                  </svg>
+                </div>
+                <h3>Lightning LAN File Share</h3>
+                <p>Transfer multi-gigabyte files, deep folders, and direct chunks at wire speeds across devices with zero internet needed.</p>
+              </div>
+              
+              <!-- Slide 2B -->
+              <div class="carousel-slide" data-carousel="1">
+                <div class="feature-illustration">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feature-main-icon text-neon-purple">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </div>
+                <h3>End-to-End Encrypted Chat</h3>
+                <p>Chat and share in completely secure, encrypted offline rooms. No data ever hits the cloud or leaves your WiFi router.</p>
+              </div>
+
+              <!-- Slide 2C -->
+              <div class="carousel-slide" data-carousel="2">
+                <div class="feature-illustration">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feature-main-icon text-neon-green">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                  </svg>
+                </div>
+                <h3>Interactive Sketch Board</h3>
+                <p>Doodle, mock up, and sketch collaboratively with peers in real-time on a beautifully smooth shared whiteboard canvas.</p>
+              </div>
+
+              <!-- Slide 2D -->
+              <div class="carousel-slide" data-carousel="3">
+                <div class="feature-illustration">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feature-main-icon text-neon-yellow">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                </div>
+                <h3>Virtual NAS Server Drive</h3>
+                <p>Turn your computer into a local server. Broadcast files as a network-attached storage drive accessible to authorized devices.</p>
+              </div>
+            </div>
+            
+            <!-- Carousel Control Buttons -->
+            <div class="carousel-nav">
+              <button class="carousel-arrow prev" aria-label="Previous Feature">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+              </button>
+              <div class="carousel-dots">
+                <span class="carousel-dot active" data-carousel="0"></span>
+                <span class="carousel-dot" data-carousel="1"></span>
+                <span class="carousel-dot" data-carousel="2"></span>
+                <span class="carousel-dot" data-carousel="3"></span>
+              </div>
+              <button class="carousel-arrow next" aria-label="Next Feature">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="setup-actions">
+            <button class="primary-btn setup-back-btn outline">Back</button>
+            <button class="primary-btn setup-next-btn">Next: Identity</button>
+          </div>
+        </div>
+
+        <!-- Slide 3: Set display name -->
+        <div class="setup-slide" data-slide="3">
+          <h2>Create Your Identity</h2>
+          <p class="subtitle">Choose how you will appear to other users on the local network.</p>
+          
+          <div class="setup-identity-box">
+            <div class="form-group">
+              <label for="setup-username-input">Your Display Name</label>
+              <div class="input-with-prefix">
+                <span class="input-prefix">@</span>
+                <input type="text" id="setup-username-input" placeholder="e.g. Satoshi, Alice..." maxlength="20" required autocomplete="off">
+              </div>
+              <span class="field-hint">Other peers will identify you by this name.</span>
+              <div id="setup-username-error" class="form-error hidden" style="margin-top: 8px;">Please enter a valid display name.</div>
+            </div>
+            
+            <div class="avatar-preview-box">
+              <div id="setup-avatar-preview" class="avatar-preview">?</div>
+              <span>Live Avatar Preview</span>
+            </div>
+          </div>
+
+          <div class="setup-actions">
+            <button class="primary-btn setup-back-btn outline">Back</button>
+            <button class="primary-btn setup-next-btn" id="setup-identity-next-btn">Next: Privacy</button>
+          </div>
+        </div>
+
+        <!-- Slide 4: Privacy & Finish -->
+        <div class="setup-slide" data-slide="4">
+          <h2>Secure local-first boundaries</h2>
+          <p class="subtitle">Please review and accept our zero-data tracking policy before connecting.</p>
+          
+          <div class="setup-privacy-card">
+            <div class="privacy-bullet">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="bullet-icon">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+              <div>
+                <strong>Local Network Isolation</strong>
+                <span>All communication, voice calls, whiteboard drawings, and file sharing are contained strictly inside your local subnet.</span>
+              </div>
+            </div>
+            <div class="privacy-bullet">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="bullet-icon">
+                <path d="M18 11.03V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.13M15 2h6v6M21 2L10 13"></path>
+              </svg>
+              <div>
+                <strong>No Cloud Backend</strong>
+                <span>There are zero remote databases, zero trackers, and zero analytic packages. No data ever exits your router.</span>
+              </div>
+            </div>
+            
+            <div class="privacy-link-container">
+              <a href="https://filesharex.vercel.app/privacy" target="_blank" id="setup-privacy-link" class="privacy-web-link">
+                <span>View Full Privacy Policy website</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+              </a>
+            </div>
+
+            <div class="checkbox-container">
+              <label class="custom-checkbox">
+                <input type="checkbox" id="setup-privacy-checkbox">
+                <span class="checkmark"></span>
+                <span class="checkbox-text">I accept the privacy policy &amp; zero-knowledge storage conditions.</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-actions">
+            <button class="primary-btn setup-back-btn outline">Back</button>
+            <button class="primary-btn" id="setup-finish-btn" disabled>Finish &amp; Connect</button>
+          </div>
+        </div>
+
+      </div>
+
     </div>
   </div>
 

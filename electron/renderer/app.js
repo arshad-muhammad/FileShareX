@@ -637,6 +637,14 @@ const DOM = {
   usernameModal: document.getElementById('username-modal'),
   usernameForm: document.getElementById('username-form'),
   usernameInput: document.getElementById('username-input'),
+  
+  // First-Time Setup / Onboarding Modal
+  setupModal: document.getElementById('setup-modal'),
+  setupUsernameInput: document.getElementById('setup-username-input'),
+  setupUsernameError: document.getElementById('setup-username-error'),
+  setupAvatarPreview: document.getElementById('setup-avatar-preview'),
+  setupPrivacyCheckbox: document.getElementById('setup-privacy-checkbox'),
+  setupFinishBtn: document.getElementById('setup-finish-btn'),
 
   createRoomBtn: document.getElementById('create-room-btn'),
   createRoomModal: document.getElementById('create-room-modal'),
@@ -849,9 +857,11 @@ function initApp() {
     DOM.app.classList.add('sidebar-collapsed');
   }
 
-  // Restore saved username from localStorage — skip modal if found
+  // Check first-time setup / onboarding status
+  const setupComplete = localStorage.getItem('fsx_setup_complete') === 'true';
   const savedUsername = localStorage.getItem('fsx_username');
-  if (savedUsername) {
+
+  if (setupComplete && savedUsername) {
     state.username = savedUsername;
     DOM.currentUserName.innerText = savedUsername;
     DOM.currentUserAvatar.innerText = savedUsername.charAt(0).toUpperCase();
@@ -859,6 +869,13 @@ function initApp() {
     DOM.usernameModal.classList.remove('active');
     DOM.app.classList.remove('hidden');
     socket.connect();
+  } else if (setupComplete && !savedUsername) {
+    // Show regular username connection modal if setup completed but no nickname stored
+    DOM.usernameModal.classList.add('active');
+  } else {
+    // Show onboarding flow setup modal
+    DOM.setupModal.classList.add('active');
+    initSetupFlow();
   }
 
   // Phase 3: Start LAN Auto-Discovery Polling
@@ -2676,6 +2693,188 @@ function setupEventListeners() {
         metaKey: e.metaKey,
         shiftKey: e.shiftKey
       });
+    }
+  });
+
+  // --- Onboarding Setup Flow Listeners ---
+  
+  // Setup Next button triggers
+  DOM.setupModal.querySelectorAll('.setup-next-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (setupCurrentSlide === 3) {
+        // Validate Nickname on Slide 3 before going next
+        const nickname = DOM.setupUsernameInput.value.trim();
+        if (!nickname || nickname.length < 2) {
+          DOM.setupUsernameError.innerText = 'Nickname must be at least 2 characters.';
+          DOM.setupUsernameError.classList.remove('hidden');
+          return;
+        }
+        DOM.setupUsernameError.classList.add('hidden');
+      }
+      
+      if (setupCurrentSlide < totalSetupSlides) {
+        goToSetupSlide(setupCurrentSlide + 1);
+      }
+    });
+  });
+
+  // Setup Back button triggers
+  DOM.setupModal.querySelectorAll('.setup-back-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (setupCurrentSlide > 1) {
+        goToSetupSlide(setupCurrentSlide - 1);
+      }
+    });
+  });
+
+  // Features carousel Prev/Next arrows
+  const prevArrow = DOM.setupModal.querySelector('.carousel-arrow.prev');
+  const nextArrow = DOM.setupModal.querySelector('.carousel-arrow.next');
+
+  if (prevArrow) {
+    prevArrow.addEventListener('click', () => {
+      let targetIdx = carouselCurrentSlide - 1;
+      if (targetIdx < 0) targetIdx = totalCarouselSlides - 1;
+      goToCarouselSlide(targetIdx);
+    });
+  }
+
+  if (nextArrow) {
+    nextArrow.addEventListener('click', () => {
+      let targetIdx = carouselCurrentSlide + 1;
+      if (targetIdx >= totalCarouselSlides) targetIdx = 0;
+      goToCarouselSlide(targetIdx);
+    });
+  }
+
+  // Features carousel Dots click
+  DOM.setupModal.querySelectorAll('.carousel-dot').forEach((dot, idx) => {
+    dot.addEventListener('click', () => {
+      goToCarouselSlide(idx);
+    });
+  });
+
+  // Slide 3 Username input live preview listener
+  DOM.setupUsernameInput.addEventListener('input', () => {
+    const val = DOM.setupUsernameInput.value.trim();
+    if (val) {
+      DOM.setupAvatarPreview.innerText = val.charAt(0).toUpperCase();
+      DOM.setupUsernameError.classList.add('hidden');
+    } else {
+      DOM.setupAvatarPreview.innerText = '?';
+    }
+  });
+
+  // Slide 4 Privacy Policy checkbox change listener
+  DOM.setupPrivacyCheckbox.addEventListener('change', () => {
+    DOM.setupFinishBtn.disabled = !DOM.setupPrivacyCheckbox.checked;
+  });
+
+  // Slide 4 Finish setup button trigger
+  DOM.setupFinishBtn.addEventListener('click', () => {
+    const nickname = DOM.setupUsernameInput.value.trim();
+    if (!nickname || nickname.length < 2) {
+      goToSetupSlide(3);
+      DOM.setupUsernameError.innerText = 'Nickname must be at least 2 characters.';
+      DOM.setupUsernameError.classList.remove('hidden');
+      return;
+    }
+
+    // Save configurations
+    localStorage.setItem('fsx_username', nickname);
+    localStorage.setItem('fsx_setup_complete', 'true');
+    
+    // Assign display nickname to global states
+    state.username = nickname;
+    DOM.currentUserName.innerText = nickname;
+    DOM.currentUserAvatar.innerText = nickname.charAt(0).toUpperCase();
+    DOM.usernameInput.value = nickname;
+
+    // Connect automatically
+    if (!socket.connected) {
+      socket.connect();
+    } else {
+      socket.emit('set-username', nickname);
+    }
+
+    // Dynamic browser notification request
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    // Animate setup modal out and show workspace
+    DOM.setupModal.classList.remove('active');
+    DOM.app.classList.remove('hidden');
+  });
+}
+
+// Onboarding setup slide state variables
+let setupCurrentSlide = 1;
+let carouselCurrentSlide = 0;
+const totalSetupSlides = 4;
+const totalCarouselSlides = 4;
+
+function initSetupFlow() {
+  setupCurrentSlide = 1;
+  carouselCurrentSlide = 0;
+  goToSetupSlide(1);
+  goToCarouselSlide(0);
+  DOM.setupUsernameInput.value = '';
+  DOM.setupAvatarPreview.innerText = '?';
+  DOM.setupPrivacyCheckbox.checked = false;
+  DOM.setupFinishBtn.disabled = true;
+  DOM.setupUsernameError.classList.add('hidden');
+}
+
+function goToSetupSlide(slideNum) {
+  setupCurrentSlide = slideNum;
+  
+  // Update progress bar
+  const progressPercent = (slideNum / totalSetupSlides) * 100;
+  const progressFill = DOM.setupModal.querySelector('.progress-bar-fill');
+  if (progressFill) progressFill.style.width = progressPercent + '%';
+
+  // Update dots classes
+  DOM.setupModal.querySelectorAll('.progress-dot').forEach((dot, idx) => {
+    const dotSlide = idx + 1;
+    dot.className = 'progress-dot';
+    if (dotSlide === slideNum) {
+      dot.classList.add('active');
+    } else if (dotSlide < slideNum) {
+      dot.classList.add('completed');
+    }
+  });
+
+  // Update slide display
+  DOM.setupModal.querySelectorAll('.setup-slide').forEach(slide => {
+    slide.classList.remove('active');
+    if (parseInt(slide.dataset.slide) === slideNum) {
+      slide.classList.add('active');
+    }
+  });
+
+  // Focus input field on Slide 3
+  if (slideNum === 3) {
+    setTimeout(() => DOM.setupUsernameInput.focus(), 150);
+  }
+}
+
+function goToCarouselSlide(idx) {
+  carouselCurrentSlide = idx;
+  
+  // Toggle active carousel slides
+  DOM.setupModal.querySelectorAll('.carousel-slide').forEach((slide, sIdx) => {
+    slide.classList.remove('active');
+    if (sIdx === idx) {
+      slide.classList.add('active');
+    }
+  });
+
+  // Toggle active carousel indicators
+  DOM.setupModal.querySelectorAll('.carousel-dot').forEach((dot, dIdx) => {
+    dot.classList.remove('active');
+    if (dIdx === idx) {
+      dot.classList.add('active');
     }
   });
 }
