@@ -112,7 +112,7 @@ export default function Home() {
           </p>
           
           <div className="hero-actions" id="downloads">
-            <a href="https://github.com/ritharnapv/FileShareX/releases/latest/download/FileShareX_Setup_1.0.0.exe" className="btn-primary" id="hero-primary-cta">
+            <a href="/downloads/FileShareX_Setup_1.0.0.exe" className="btn-primary" id="hero-primary-cta" download="FileShareX_Setup_1.0.0.exe">
               <span>Download for Windows</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -120,10 +120,10 @@ export default function Home() {
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
             </a>
-            <a href="https://github.com/ritharnapv/FileShareX/releases/latest/download/FileShareX-1.0.0.dmg" className="btn-secondary">
+            <a href="/downloads/FileShareX-1.0.0.dmg" className="btn-secondary" download="FileShareX-1.0.0.dmg">
               <span>macOS (.dmg)</span>
             </a>
-            <a href="https://github.com/ritharnapv/FileShareX/releases/latest/download/FileShareX-1.0.0.AppImage" className="btn-secondary">
+            <a href="/downloads/FileShareX-1.0.0.AppImage" className="btn-secondary" download="FileShareX-1.0.0.AppImage">
               <span>Linux (.AppImage)</span>
             </a>
           </div>

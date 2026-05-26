@@ -34,3 +34,6 @@ release/
 .next/
 out/
 .vercel
+
+# Exclude large local download binaries from Git push
+public/downloads/
