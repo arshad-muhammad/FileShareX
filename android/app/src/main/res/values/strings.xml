@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FileShareX</string>
+    <string name="title_activity_main">FileShareX</string>
+    <string name="package_name">com.filesharex.app</string>
+    <string name="custom_url_scheme">com.filesharex.app</string>
+</resources>

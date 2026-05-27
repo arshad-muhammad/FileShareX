@@ -1,26 +1,24 @@
 {
-  "name": "filesharex",
+  "name": "filesharex-monorepo",
   "version": "1.0.0",
-  "description": "Premium LAN Chat and File Sharing Web Application",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "keywords": [
-    "lan",
-    "chat",
-    "file-sharing",
-    "offline-first",
-    "socket.io",
-    "chunked-uploads"
+  "private": true,
+  "workspaces": [
+    "website",
+    "desktop"
   ],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "express": "^4.19.2",
-    "multer": "^1.4.5-lts.1",
-    "qrcode": "^1.5.3",
-    "socket.io": "^4.7.5",
-    "sqlite3": "^5.1.7"
+  "scripts": {
+    "web:dev": "npm --prefix website run dev",
+    "web:build": "npm --prefix website run build",
+    "web:start": "npm --prefix website run start",
+    "electron:start": "npm --prefix desktop run start",
+    "electron:pack": "npm --prefix desktop run pack",
+    "electron:dist": "npm --prefix desktop run dist",
+    "mobile:init": "npx cap init",
+    "mobile:add": "npx cap add android",
+    "mobile:sync": "npx cap sync",
+    "mobile:build": "npm run web:build && npx cap sync && cd android && gradlew assembleDebug"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
   }
 }

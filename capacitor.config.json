@@ -1,0 +1,8 @@
+{
+  "appId": "com.filesharex.app",
+  "appName": "FileShareX",
+  "webDir": "website/out",
+  "server": {
+    "androidScheme": "https"
+  }
+}

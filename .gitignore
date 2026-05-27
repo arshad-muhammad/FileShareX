@@ -2,11 +2,11 @@
 node_modules/
 
 # Application specific
-uploads/
-database/*.db
-database/*.db-journal
-database/*.db-shm
-database/*.db-wal
+desktop/uploads/
+desktop/database/*.db
+desktop/database/*.db-journal
+desktop/database/*.db-shm
+desktop/database/*.db-wal
 
 # Log files
 npm-debug.log*
@@ -23,4 +23,29 @@ Thumbs.db
 .env
 .env.local
 .idea
-database/chat.json
+desktop/database/chat.json
+
+# Electron build directory
+desktop/dist/
+dist/
+dist-*
+release/
+
+# Next.js build and static export folders
+website/.next/
+website/out/
+out/
+.next/
+.vercel
+
+# Exclude large local download binaries from Git push
+website/public/downloads/
+
+# Large binary files
+*.exe
+*.dmg
+*.AppImage
+*.apk
+
+# Android build output
+android/app/build/
