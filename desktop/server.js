@@ -441,10 +441,11 @@ app.post('/api/upload/chunk', (req, res) => {
   upload.single('chunk')(req, res, (err) => {
     if (err) {
       console.error('Multer error:', err);
-      return res.status(500).json({ error: err.message });
+      return res.status(400).json({ error: err.message || 'Chunk upload failed' });
     }
 
-    const { uploadId, chunkIndex } = req.body;
+    const uploadId = req.body.uploadId || req.query.uploadId;
+    const chunkIndex = req.body.chunkIndex !== undefined ? req.body.chunkIndex : req.query.chunkIndex;
 
     if (!uploadId || chunkIndex === undefined) {
       return res.status(400).json({ error: 'Missing uploadId or chunkIndex in request body' });

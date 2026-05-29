@@ -1889,6 +1889,7 @@ async function queueAndUploadFiles(filesList, isDriveFile = false, parentFolderI
       status: 'uploading',
       controller: null,
       bytesUploaded: 0,
+      errorMessage: '',
       encryptedChunks: null,
       isDriveFile,
       parentFolderId
@@ -1985,7 +1986,14 @@ async function runChunkedUpload(uploadId) {
       });
 
       if (!chunkRes.ok) {
-        throw new Error(`Upload chunk ${chunkIndex} failed with server status: ${chunkRes.status}`);
+        let chunkError = `Upload chunk ${chunkIndex} failed with server status: ${chunkRes.status}`;
+        try {
+          const chunkData = await chunkRes.json();
+          if (chunkData && chunkData.error) chunkError = chunkData.error;
+        } catch (parseError) {
+          // Ignore JSON parsing failures and use status fallback
+        }
+        throw new Error(chunkError);
       }
 
       // Update state and progress indicators
@@ -2037,6 +2045,7 @@ async function runChunkedUpload(uploadId) {
 
       if (completeRes.ok && completeData.success) {
         task.status = 'completed';
+        task.errorMessage = '';
         renderUploadTasks();
         
         // Remove task automatically from manager pane after a short delay
@@ -2054,6 +2063,7 @@ async function runChunkedUpload(uploadId) {
       } else {
         console.error(completeData.error || 'Server assembly failure');
         task.status = 'error';
+        task.errorMessage = completeData.error || 'Server failed to assemble uploaded chunks.';
         renderUploadTasks();
       }
     }
@@ -2065,6 +2075,7 @@ async function runChunkedUpload(uploadId) {
     } else {
       console.error(`Chunk transfer failed for file ${task.fileName}:`, err);
       task.status = 'error';
+      task.errorMessage = err.message || 'Network error while uploading file chunks.';
       renderUploadTasks();
     }
   }
@@ -2088,6 +2099,7 @@ function resumeUploadTask(uploadId) {
   if (!task) return;
 
   task.status = 'uploading';
+  task.errorMessage = '';
   renderUploadTasks();
   runChunkedUpload(uploadId);
 }
@@ -2140,6 +2152,8 @@ function renderUploadTasks() {
     } else if (task.status === 'assembling') {
       badgeText = 'Assembling Final File';
       badgeClass = 'uploading';
+    } else if (task.status === 'error') {
+      badgeText = 'Failed';
     }
 
     li.innerHTML = `
@@ -2163,6 +2177,7 @@ function renderUploadTasks() {
         </div>
         <span class="progress-percent">${percent}%</span>
       </div>
+      ${task.errorMessage ? `<div class="upload-task-error">${escapeHTML(task.errorMessage)}</div>` : ''}
 
       <div class="upload-task-actions">
         ${task.status === 'uploading' ? `
@@ -2179,6 +2194,17 @@ function renderUploadTasks() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg> Resume
+          </button>
+        ` : ''}
+
+        ${task.status === 'error' ? `
+          <button class="task-action-btn resume-btn" data-id="${id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.12-3.36L23 10"></path>
+              <path d="M20.49 15a9 9 0 0 1-14.12 3.36L1 14"></path>
+            </svg> Retry
           </button>
         ` : ''}
 
