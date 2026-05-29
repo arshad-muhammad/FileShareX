@@ -1,0 +1,51 @@
+# Dependency directories
+node_modules/
+
+# Application specific
+desktop/uploads/
+desktop/database/*.db
+desktop/database/*.db-journal
+desktop/database/*.db-shm
+desktop/database/*.db-wal
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Optional: Environment variables
+.env
+.env.local
+.idea
+desktop/database/chat.json
+
+# Electron build directory
+desktop/dist/
+dist/
+dist-*
+release/
+
+# Next.js build and static export folders
+website/.next/
+website/out/
+out/
+.next/
+.vercel/
+
+# Exclude large local download binaries from Git push
+website/public/downloads/
+
+# Large binary files
+*.exe
+*.dmg
+*.AppImage
+*.apk
+
+# Android build output
+android/app/build/

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FileShareX Loading...</title>
+  <style>
+    :root {
+      --bg-dark: #08080f;
+      --accent: #5a5cf0;
+      --accent-purple: #a855f7;
+      --text: #ffffff;
+      --text-muted: #8c8da6;
+      --border-radius: 50%;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: transparent;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+      user-select: none;
+      -webkit-app-region: drag; /* make borderless window draggable */
+    }
+
+    .splash-container {
+      width: 380px;
+      height: 380px;
+      background: rgba(10, 10, 18, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 50%; /* fully rounded splash card */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 
+        0 24px 60px rgba(0, 0, 0, 0.65), 
+        0 0 50px rgba(90, 92, 240, 0.15),
+        inset 0 0 30px rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      position: relative;
+      padding: 40px;
+    }
+
+    .loader-ring {
+      position: absolute;
+      width: 250px;
+      height: 250px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--accent);
+      border-bottom-color: var(--accent-purple);
+      animation: spin 3s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+      box-shadow: 
+        0 0 10px rgba(90, 92, 240, 0.2),
+        inset 0 0 10px rgba(168, 85, 247, 0.2);
+    }
+
+    .logo-wrapper {
+      width: 130px;
+      height: 130px;
+      border-radius: var(--border-radius); /* fully rounded! */
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.05);
+      animation: pulse-glow 2.5s infinite alternate;
+      overflow: hidden;
+    }
+
+    .logo-img {
+      width: 130px;
+      height: 130px;
+      object-fit: cover;
+      border-radius: var(--border-radius); /* fully rounded image! */
+    }
+
+    .brand-details {
+      margin-top: 25px;
+      z-index: 2;
+      text-align: center;
+    }
+
+    .brand-name {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 40%, #a5b4fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+
+    .status-text {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      animation: fade-text 1.5s infinite ease-in-out;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse-glow {
+      0% {
+        transform: scale(0.98);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 10px rgba(90, 92, 240, 0.2);
+        border-color: rgba(90, 92, 240, 0.15);
+      }
+      100% {
+        transform: scale(1.02);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(90, 92, 240, 0.45);
+        border-color: rgba(90, 92, 240, 0.4);
+      }
+    }
+
+    @keyframes fade-text {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="splash-container">
+    <div class="loader-ring"></div>
+    <div class="logo-wrapper">
+      <img src="logo.png" alt="Logo" class="logo-img">
+    </div>
+    <div class="brand-details">
+      <h2 class="brand-name">FileShareX</h2>
+      <div class="status-text">Booting Local Secure Network...</div>
+    </div>
+  </div>
+</body>
+</html>
