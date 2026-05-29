@@ -39,7 +39,7 @@ if (!fs.existsSync(TMP_DIR)) {
 // Express Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, '..', 'website', 'out')));
+app.use(express.static(path.join(__dirname, 'renderer')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Route to serve the app dashboard - redirected to root marketing page inside desktop flow
@@ -58,6 +58,24 @@ function getLocalIPs() {
   
   for (const interfaceName in interfaces) {
     const ifaceList = interfaces[interfaceName];
+    const nameLower = interfaceName.toLowerCase();
+    
+    // Check if the interface is a virtual network adapter
+    const isVirtual = nameLower.includes('virtual') ||
+                      nameLower.includes('host-only') ||
+                      nameLower.includes('vmware') ||
+                      nameLower.includes('virtualbox') ||
+                      nameLower.includes('vbox') ||
+                      nameLower.includes('wsl') ||
+                      nameLower.includes('docker') ||
+                      nameLower.includes('hyper-v') ||
+                      nameLower.includes('vpn') ||
+                      nameLower.includes('tap') ||
+                      nameLower.includes('npcap') ||
+                      nameLower.includes('loopback');
+
+    if (isVirtual) continue;
+
     for (const iface of ifaceList) {
       // Skip internal (loopback) and non-IPv4 addresses
       if (iface.family === 'IPv4' && !iface.internal) {
@@ -65,28 +83,51 @@ function getLocalIPs() {
       }
     }
   }
+
+  // Fallback: If no physical interface IP was found, do a scan including virtual ones
+  if (addresses.length === 0) {
+    for (const interfaceName in interfaces) {
+      const ifaceList = interfaces[interfaceName];
+      for (const iface of ifaceList) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          addresses.push(iface.address);
+        }
+      }
+    }
+  }
+
   return addresses;
 }
 
-const localIPs = getLocalIPs();
+let localIPs = getLocalIPs();
 // Choose a primary LAN IP (prefer 192.168.x.x, 10.x.x.x, then 172.x.x.x, then any)
-const primaryIP = localIPs.find(ip => ip.startsWith('192.168.')) || 
-                  localIPs.find(ip => ip.startsWith('10.')) || 
-                  localIPs.find(ip => ip.startsWith('172.')) || 
-                  localIPs[0] || 
-                  'localhost';
+let primaryIP = localIPs.find(ip => ip.startsWith('192.168.')) || 
+                localIPs.find(ip => ip.startsWith('10.')) || 
+                localIPs.find(ip => ip.startsWith('172.')) || 
+                localIPs[0] || 
+                'localhost';
 
 // On cloud platforms, use the public URL provided by the hosting service
-const localUrl = PUBLIC_URL || `http://${primaryIP}:${PORT}`;
+let localUrl = PUBLIC_URL || `http://${primaryIP}:${PORT}`;
 
 // Generate QR Code for connection
 let primaryQrDataUrl = '';
-qrcode.toDataURL(localUrl, { margin: 2, scale: 6 }, (err, url) => {
-  if (!err) {
-    primaryQrDataUrl = url;
-  } else {
-    console.error('Failed to generate connection QR code:', err);
-  }
+function generateQrCode(urlToEncode) {
+  return new Promise((resolve) => {
+    qrcode.toDataURL(urlToEncode, { margin: 2, scale: 6 }, (err, url) => {
+      if (!err) {
+        resolve(url);
+      } else {
+        console.error('Failed to generate connection QR code:', err);
+        resolve('');
+      }
+    });
+  });
+}
+
+// Initial QR Code generation
+generateQrCode(localUrl).then(url => {
+  primaryQrDataUrl = url;
 });
 
 // Helper to get unique filename to prevent overwriting.
@@ -213,7 +254,19 @@ function getRoomList(networkId) {
 // ----------------------------------------
 
 // Fetch system network connection info
-app.get('/api/info', (req, res) => {
+app.get('/api/info', async (req, res) => {
+  // Update IPs dynamically in case network configuration has changed
+  localIPs = getLocalIPs();
+  primaryIP = localIPs.find(ip => ip.startsWith('192.168.')) || 
+              localIPs.find(ip => ip.startsWith('10.')) || 
+              localIPs.find(ip => ip.startsWith('172.')) || 
+              localIPs[0] || 
+              'localhost';
+  localUrl = PUBLIC_URL || `http://${primaryIP}:${PORT}`;
+  
+  // Regenerate QR Code dynamically
+  primaryQrDataUrl = await generateQrCode(localUrl);
+
   // On cloud platforms, provide the public URL instead of internal container IPs
   const effectiveUrl = PUBLIC_URL || localUrl;
   const effectiveIP = IS_CLOUD ? (PUBLIC_URL ? new URL(PUBLIC_URL).hostname : 'cloud-hosted') : primaryIP;
