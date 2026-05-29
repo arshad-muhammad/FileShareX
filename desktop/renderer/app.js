@@ -790,9 +790,22 @@ let stateHasMediaAccess = false;
 let stateHasNotifAccess = false;
 
 // Dynamic check function returning boolean: true if all permitted, false if blocked
+// Dynamic check function returning boolean: true if all permitted, false if blocked
 async function checkRequiredPermissions() {
+  const isDesktopApp = !!window.api;
+  const isSecureContext = window.isSecureContext;
+
   let mediaAccess = false;
   let notifAccess = false;
+
+  // On standard web browsers over insecure HTTP, secure APIs are completely unavailable.
+  // We skip checking them to prevent any browser warning prompts or console errors.
+  if (!isDesktopApp && !isSecureContext) {
+    mediaAccess = false;
+    notifAccess = false;
+    updatePermissionBadgesUI(mediaAccess, notifAccess);
+    return true; // Return true to unlock onboarding
+  }
 
   // 1. Verify Camera & Mic Stream permissions
   try {
@@ -839,9 +852,9 @@ async function checkRequiredPermissions() {
   // Update DOM badges throughout setup flow & settings dynamically
   updatePermissionBadgesUI(mediaAccess, notifAccess);
 
-  // If setup is complete, enforce blocked dialog overlay if either is blocked/denied
+  // If setup is complete, enforce blocked dialog overlay if either is blocked/denied (only on desktop app)
   const setupComplete = localStorage.getItem('fsx_setup_complete') === 'true';
-  if (setupComplete) {
+  if (setupComplete && isDesktopApp) {
     if (!mediaAccess || !notifAccess) {
       DOM.permissionBlockedDialog.classList.add('active');
     } else {
@@ -849,19 +862,52 @@ async function checkRequiredPermissions() {
     }
   }
 
-  return mediaAccess && notifAccess;
+  return isDesktopApp ? (mediaAccess && notifAccess) : true;
 }
 
 // Function to update badge styling and labels
 function updatePermissionBadgesUI(mediaAccess, notifAccess) {
+  const isDesktopApp = !!window.api;
+  const isSecureContext = window.isSecureContext;
+
   // Slide 4 indicators
   if (DOM.badgeMediaStatus) {
-    DOM.badgeMediaStatus.className = 'status-badge ' + (mediaAccess ? 'badge-granted' : 'badge-denied');
-    DOM.badgeMediaStatus.innerText = mediaAccess ? 'Granted' : 'Blocked';
+    DOM.badgeMediaStatus.className = 'status-badge ' + (mediaAccess ? 'badge-granted' : (isDesktopApp ? 'badge-denied' : 'badge-pending'));
+    DOM.badgeMediaStatus.innerText = mediaAccess ? 'Granted' : (isDesktopApp ? 'Blocked' : 'Optional');
   }
   if (DOM.badgeNotificationsStatus) {
-    DOM.badgeNotificationsStatus.className = 'status-badge ' + (notifAccess ? 'badge-granted' : 'badge-denied');
-    DOM.badgeNotificationsStatus.innerText = notifAccess ? 'Granted' : 'Blocked';
+    DOM.badgeNotificationsStatus.className = 'status-badge ' + (notifAccess ? 'badge-granted' : (isDesktopApp ? 'badge-denied' : 'badge-pending'));
+    DOM.badgeNotificationsStatus.innerText = notifAccess ? 'Granted' : (isDesktopApp ? 'Blocked' : 'Optional');
+  }
+
+  // Slide 4 Grant buttons UI handling
+  if (DOM.btnGrantMedia) {
+    if (!isDesktopApp && !isSecureContext) {
+      DOM.btnGrantMedia.disabled = true;
+      DOM.btnGrantMedia.style.opacity = '0.5';
+      DOM.btnGrantMedia.style.pointerEvents = 'none';
+      DOM.btnGrantMedia.innerText = 'Unavailable';
+    } else if (mediaAccess) {
+      DOM.btnGrantMedia.disabled = true;
+      DOM.btnGrantMedia.innerText = 'Granted';
+    } else {
+      DOM.btnGrantMedia.disabled = false;
+      DOM.btnGrantMedia.innerText = 'Grant';
+    }
+  }
+  if (DOM.btnGrantNotifications) {
+    if (!isDesktopApp && !isSecureContext) {
+      DOM.btnGrantNotifications.disabled = true;
+      DOM.btnGrantNotifications.style.opacity = '0.5';
+      DOM.btnGrantNotifications.style.pointerEvents = 'none';
+      DOM.btnGrantNotifications.innerText = 'Unavailable';
+    } else if (notifAccess) {
+      DOM.btnGrantNotifications.disabled = true;
+      DOM.btnGrantNotifications.innerText = 'Granted';
+    } else {
+      DOM.btnGrantNotifications.disabled = false;
+      DOM.btnGrantNotifications.innerText = 'Grant';
+    }
   }
 
   // Blocked Dialog indicators
@@ -884,15 +930,44 @@ function updatePermissionBadgesUI(mediaAccess, notifAccess) {
     DOM.settingsNotifBadge.innerText = notifAccess ? 'Granted' : 'Denied';
   }
 
+  // Settings Modal Regrant buttons handling
+  if (DOM.settingsRegrantMedia) {
+    if (!isDesktopApp && !isSecureContext) {
+      DOM.settingsRegrantMedia.disabled = true;
+      DOM.settingsRegrantMedia.innerText = 'Unavailable';
+    } else {
+      DOM.settingsRegrantMedia.disabled = mediaAccess;
+      DOM.settingsRegrantMedia.innerText = mediaAccess ? 'Granted' : 'Grant';
+    }
+  }
+  if (DOM.settingsRegrantNotif) {
+    if (!isDesktopApp && !isSecureContext) {
+      DOM.settingsRegrantNotif.disabled = true;
+      DOM.settingsRegrantNotif.innerText = 'Unavailable';
+    } else {
+      DOM.settingsRegrantNotif.disabled = notifAccess;
+      DOM.settingsRegrantNotif.innerText = notifAccess ? 'Granted' : 'Grant';
+    }
+  }
+
   // Toggle Finish setup button unlock
   if (DOM.setupFinishBtn) {
     const privacyAccepted = DOM.setupPrivacyCheckbox.checked;
-    DOM.setupFinishBtn.disabled = !(privacyAccepted && mediaAccess && notifAccess);
+    const permissionsOk = isDesktopApp ? (mediaAccess && notifAccess) : true;
+    DOM.setupFinishBtn.disabled = !(privacyAccepted && permissionsOk);
   }
 }
 
 // Grant Media streams helper
 async function requestMediaPermissions() {
+  const isDesktopApp = !!window.api;
+  const isSecureContext = window.isSecureContext;
+
+  if (!isSecureContext && !isDesktopApp) {
+    showCustomAlert('Optional Feature', 'Camera & Microphone access is only supported over secure HTTPS connections. You can still use chat and file-sharing without it!', 'info');
+    return;
+  }
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
     stream.getTracks().forEach(track => track.stop());
@@ -907,6 +982,14 @@ async function requestMediaPermissions() {
 
 // Request Desktop Notifications helper
 async function requestNotificationPermissions() {
+  const isDesktopApp = !!window.api;
+  const isSecureContext = window.isSecureContext;
+
+  if (!isSecureContext && !isDesktopApp) {
+    showCustomAlert('Optional Feature', 'Desktop notifications are only supported over secure HTTPS connections. You can still use chat and file-sharing without it!', 'info');
+    return;
+  }
+
   if ('Notification' in window) {
     try {
       const permission = await Notification.requestPermission();
@@ -919,6 +1002,8 @@ async function requestNotificationPermissions() {
       console.error('[Permissions] Notification request error:', err);
       await checkRequiredPermissions();
     }
+  } else {
+    showCustomAlert('Not Supported', 'Desktop notifications are not supported on this device/browser.', 'warning');
   }
 }
 
@@ -2395,14 +2480,16 @@ function setupEventListeners() {
     
     // Prompt micro-streams
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-      stream.getTracks().forEach(t => t.stop());
+      if (window.isSecureContext) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        stream.getTracks().forEach(t => t.stop());
+      }
     } catch (err) {
       console.log('[Permissions] Media recheck streams failed:', err);
     }
     
     // Prompt Notification trigger
-    if ('Notification' in window) {
+    if (window.isSecureContext && 'Notification' in window) {
       await Notification.requestPermission();
     }
 
@@ -2542,7 +2629,7 @@ function setupEventListeners() {
       DOM.currentUserAvatar.innerText = selectedUsername.charAt(0).toUpperCase();
 
       // Request browser Notification permission dynamically
-      if ('Notification' in window && Notification.permission === 'default') {
+      if (window.isSecureContext && 'Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
 
@@ -2798,7 +2885,12 @@ function setupEventListeners() {
   });
 
   // 7. QR modal connection panel triggers
-  DOM.networkBadge.addEventListener('click', () => {
+  DOM.networkBadge.addEventListener('click', async () => {
+    try {
+      await fetchNetworkInfo();
+    } catch (e) {
+      console.error('Failed to update network info before opening QR modal:', e);
+    }
     DOM.qrModal.classList.add('active');
   });
 
